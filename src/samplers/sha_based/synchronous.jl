@@ -2,6 +2,8 @@ const SHSync = SuccessiveHalving{true}
 
 """
     Hyperband(; R, η=3, r_min=1, iterations=1, inner=RandomSampler())
+
+Successive halving over brackets that start at resource levels from `r_min` up to `R`: after each rung the best `1/η` of trials continue with `η` times the resource, and a rung must finish before any of its trials are promoted. `iterations` repeats the whole schedule, `inner` draws the starting configurations, and the objective receives the resource level as `p.r`.
 """
 const Hyperband = SuccessiveHalving{true,<:BasicSamplers}
 

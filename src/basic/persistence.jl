@@ -1,5 +1,7 @@
 """
     load_hyperoptimizer(objective, path) -> Hyperoptimizer
+
+Restore a checkpoint written by `save_hyperoptimizer` or `run!`, supplying `objective`, which checkpoints do not store. Trials still running when the checkpoint was written are marked `Abandoned`.
 """
 function load_hyperoptimizer(objective, path::AbstractString)
     saved = JLD2.jldopen(file -> file["ho"], path, "r")
@@ -19,6 +21,8 @@ end
 
 """
     save_hyperoptimizer(ho, path)
+
+Write `ho`, without its objective, to `path` as a JLD2 checkpoint. It is written to a temporary file first and then moved into place, so a crash mid-save leaves the previous checkpoint intact.
 """
 function save_hyperoptimizer(ho::Hyperoptimizer, path::AbstractString)
     sanitized = Hyperoptimizer(ho.params, ho.candidates, ho.sampler, nothing, ho.n,

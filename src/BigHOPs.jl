@@ -28,6 +28,8 @@ include("samplers/lhs.jl")
 
 """
     BasicSamplers
+
+Samplers that draw each configuration directly: `RandomSampler` and `LHSampler`. These are the `inner` samplers `Hyperband` and `ASHA` accept.
 """
 const BasicSamplers = Union{LHSampler,RandomSampler}
 
@@ -37,6 +39,8 @@ include("samplers/sha_based/asynchronous.jl")
 include("samplers/sha_based/dehb_sync.jl")
 """
     FixedPlanSampler
+
+Samplers whose trial count is fixed when the `Hyperoptimizer` is built (`LHSampler` and the successive-halving samplers), so `settarget!` rejects them.
 """
 const FixedPlanSampler = Union{LHSampler,SuccessiveHalving}
 

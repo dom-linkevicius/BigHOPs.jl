@@ -1,5 +1,7 @@
 """
     Serial()
+
+Evaluate trials one at a time, in the calling task.
 """
 mutable struct Serial <: AbstractExecutor
     buffer::Vector{Tuple{RunEntry,Any}}

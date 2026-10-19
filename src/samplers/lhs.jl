@@ -1,5 +1,7 @@
 """
     LHSampler(; rng=StableRNG(1))
+
+Draw all `n` trials up front as a Latin hypercube, which spreads them evenly along every hyperparameter. Warns if `n` is too small to cover every combination of discrete values. Each `LHSampler()` can back only one `Hyperoptimizer`.
 """
 struct LHSampler{T<:Random.AbstractRNG} <: Sampler
     rng::T

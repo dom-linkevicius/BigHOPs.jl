@@ -2,6 +2,8 @@ const SHAsync = SuccessiveHalving{false}
 
 """
     ASHA(; R, η=3, r_min=1, iterations=1, inner=RandomSampler())
+
+Asynchronous `Hyperband`, with the same schedule and arguments: a trial is promoted as soon as it is among the best `1/η` completed so far in its rung, instead of waiting for the rung to finish. This keeps workers busy under `Threaded` or `DistributedQueue`.
 """
 const ASHA = SuccessiveHalving{false,<:BasicSamplers}
 

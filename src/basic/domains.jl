@@ -1,11 +1,15 @@
 """
     Domain
+
+Abstract type for one hyperparameter's search space: `Continuous`, `Ordinal` or `Nominal`.
 """
 abstract type Domain end
 
 """
     Nominal(levels::Int)
     Nominal(values::AbstractVector)
+
+An unordered set of choices, of any type, including functions. `Nominal(k)` is shorthand for the choices `1:k`.
 """
 struct Nominal{V<:AbstractVector} <: Domain
     values::V
@@ -20,6 +24,8 @@ Nominal(levels::Int) = Nominal(Base.OneTo(levels))
 """
     Ordinal(levels::Int)
     Ordinal(values::AbstractVector)
+
+An ordered set of choices. Numeric values must be sorted ascending; non-numeric values are taken in the order given, with a warning. `Ordinal(k)` is shorthand for the choices `1:k`.
 """
 struct Ordinal{V<:AbstractVector} <: Domain
     values::V
@@ -39,6 +45,8 @@ _check_order(values::AbstractVector) =
 
 """
     Continuous(min, max; transform=identity)
+
+A real interval `[min, max]`, passed through `transform` after sampling, so `Continuous(-4, -1; transform=exp10)` is log-uniform over `[1e-4, 1e-1]`. `transform` must be finite at both ends, and should be a named function rather than a closure if the optimizer will be checkpointed.
 """
 struct Continuous{F} <: Domain
     min::Float64
@@ -56,11 +64,15 @@ Continuous(min::Real, max::Real; transform=identity) =
 
 """
     length(d::Union{Nominal,Ordinal})
+
+Number of choices in `d`.
 """
 Base.length(d::Union{Nominal,Ordinal}) = length(d.values)
 
 """
     from_unit(d::Domain, u::Real)
+
+Decode a sampler's unit value `u ∈ [0, 1]` into a value of `d`. Discrete domains split `[0, 1]` into equal bins in order; `Continuous` maps linearly onto `[min, max]` and applies `transform`.
 """
 from_unit(d::Union{Nominal,Ordinal}, u::Real) = d.values[clamp(ceil(Int, u * length(d)), 1, length(d))]
 from_unit(d::Continuous, u::Real) = d.transform(d.min + clamp(u, 0.0, 1.0) * (d.max - d.min))
