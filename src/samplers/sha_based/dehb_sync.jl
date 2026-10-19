@@ -28,7 +28,7 @@ create_run_entry(::DEHBSampler, ho, id, params, unit_params) = _dehb_standalone(
 """
     DEHB(; R, η=3, r_min=1, iterations=1, F=0.5, crossover=0.5, rng=StableRNG(1))
 
-`Hyperband`'s schedule with differential evolution in place of random draws (Awad et al., 2021). The first bracket runs as plain Hyperband to seed one subpopulation per resource level; after that every trial is evolved from those subpopulations rather than promoted unchanged, so it trains from scratch, and a `Stateful` objective only receives a `pre_artefact` in that first bracket.
+`Hyperband`'s schedule with differential evolution in place of random draws (Awad et al., 2021, doi:10.24963/ijcai.2021/296). The first bracket runs as plain Hyperband to seed one subpopulation per resource level; after that every trial is evolved from those subpopulations rather than promoted unchanged, so it trains from scratch, and a `Stateful` objective only receives a `pre_artefact` in that first bracket.
 """
 const DEHB = SuccessiveHalving{true,<:DEHBSampler}
 
