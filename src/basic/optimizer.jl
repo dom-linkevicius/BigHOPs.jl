@@ -1,5 +1,7 @@
 """
     OptimizerStatus
+
+Lifecycle of a `Hyperoptimizer`: `Initialized`, `Running`, `Finished`, or `Errored`, which cannot be resumed.
 """
 @enum OptimizerStatus Initialized Running Errored Finished
 
@@ -19,6 +21,8 @@ end
 
 """
     Hyperoptimizer(objective, candidates::NamedTuple; sampler=RandomSampler(), n::Int)
+
+Set up a search of `n` trials over `candidates`, a `NamedTuple` of `Domain`s. `objective` takes one `NamedTuple` of hyperparameters and returns the number to minimize; see `Stateful` for objectives that carry state between trials.
 """
 function Hyperoptimizer(objective, candidates::NamedTuple; sampler::Sampler=RandomSampler(), n::Int)
     n > 0 || throw(ArgumentError("n must be positive, got $n"))
@@ -34,6 +38,8 @@ end
 
 """
     Hyperoptimizer(objective, candidates::NamedTuple, sampler::SuccessiveHalving)
+
+Set up a search with `Hyperband`, `ASHA` or `DEHB`. The number of trials comes from the sampler's schedule, and `objective` receives the resource level as `p.r`, so `:r` cannot be a candidate name.
 """
 function Hyperoptimizer(objective, candidates::NamedTuple, sampler::SuccessiveHalving)
     haskey(candidates, :r) &&
@@ -49,6 +55,8 @@ n_told(ho::Hyperoptimizer) = length(ho.runs) - ho.n_pending
 
 """
     settarget!(ho, n)
+
+Raise the trial target to `n`, e.g. to continue a finished run with `run!`. The target can only grow, and `FixedPlanSampler`s reject it.
 """
 function settarget!(ho::Hyperoptimizer, n::Int)
     ho.status == Errored &&
@@ -66,6 +74,8 @@ end
 
 """
     ask!(ho) -> RunEntry
+
+Draw the next trial from the sampler and record it as pending. Throws if the sampler is exhausted, the target is reached, or `ho` has errored.
 """
 function ask!(ho::Hyperoptimizer)
     lock(ho.lock) do
@@ -93,6 +103,8 @@ end
 
 """
     tell!(ho, entry, outcome)
+
+Record the `outcome` of a trial from `ask!`. A `NaN`, a non-number or an exception marks the trial `Failed` instead of stopping the search.
 """
 function tell!(ho::Hyperoptimizer, entry::RunEntry, outcome)
     lock(ho.lock) do
@@ -110,11 +122,13 @@ function tell!(ho::Hyperoptimizer, entry::RunEntry, outcome)
     end
 end
 
-"""
-    run!(ho; executor=Serial(), save_every=nothing, save_path=nothing, show_progress=true)
-"""
 _should_stop_asking(ho::Hyperoptimizer) = reached_target(ho) || exhausted(ho.sampler, ho) || blocked(ho.sampler, ho)
 
+"""
+    run!(ho; executor=Serial(), save_every=nothing, save_path=nothing, show_progress=true)
+
+Evaluate trials until the target is reached or the sampler is exhausted, using `executor` (`Serial`, `Threaded` or `DistributedQueue`). Given `save_path`, `ho` is checkpointed when the run ends, and also after every `save_every` trials if that is set; resume with `load_hyperoptimizer`.
+"""
 function run!(ho::Hyperoptimizer; executor::AbstractExecutor=Serial(),
               save_every::Union{Int,Nothing}=nothing, save_path::Union{AbstractString,Nothing}=nothing,
               show_progress::Bool=true)

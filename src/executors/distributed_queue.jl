@@ -1,5 +1,7 @@
 """
     DistributedQueue(max_concurrency=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout=30)
+
+Evaluate each trial on its own freshly spawned Distributed worker, up to `max_concurrency` at a time, removing the worker when the trial returns. Suited to clusters, where `spawn_worker` can request a process from a scheduler.
 """
 mutable struct DistributedQueue <: AbstractExecutor
     max_concurrency::Int
@@ -20,6 +22,10 @@ mutable struct DistributedQueue <: AbstractExecutor
 end
 """
     DistributedQueue(max_concurrency=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout=30)
+
+- `spawn_worker()`: start one worker and return its process id, e.g. `() -> first(addprocs(1))`.
+- `setup_worker(pid)`: prepare that worker before its trial, e.g. load packages and define the objective there.
+- `teardown_timeout`: seconds to wait when removing a worker.
 """
 function DistributedQueue(max_concurrency::Int=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout::Real=30)
     return DistributedQueue(max_concurrency, spawn_worker, setup_worker, teardown_timeout, Channel{Tuple{RunEntry,Any}}(Inf), 0, nothing, Tuple{Int,Task}[])
@@ -35,6 +41,8 @@ end
 
 """
     shutdown!(executor::DistributedQueue)
+
+Remove the workers of trials still running, waiting up to `teardown_timeout` seconds for each, then wait for their tasks to finish.
 """
 function shutdown!(executor::DistributedQueue)
     err = nothing

@@ -1,5 +1,7 @@
 """
     Threaded(max_concurrency=Threads.nthreads())
+
+Evaluate up to `max_concurrency` trials at once, as tasks spread over Julia's threads. Start Julia with `--threads=N` for real parallelism; on one thread the trials only interleave.
 """
 mutable struct Threaded <: AbstractExecutor
     max_concurrency::Int
@@ -29,6 +31,8 @@ end
 
 """
     shutdown!(executor::Threaded)
+
+Wait for every trial this executor started to finish.
 """
 function shutdown!(executor::Threaded)
     for t in executor.tasks

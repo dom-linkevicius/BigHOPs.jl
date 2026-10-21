@@ -1,5 +1,7 @@
 """
     RandomSampler(rng=StableRNG(1))
+
+Draw each trial's hyperparameters independently at random. Seeded by default, so repeated searches propose the same trials.
 """
 struct RandomSampler{T<:Random.AbstractRNG} <: Sampler
     rng::T
