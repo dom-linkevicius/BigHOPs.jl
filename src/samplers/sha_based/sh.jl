@@ -60,7 +60,7 @@ _total_draws(s::SuccessiveHalving) = s.iterations * _total_draws(s.R, s.r_min, s
 
 _dispatched_count(rung::ActiveRung) = length(rung.ids)
 _pending_count(runs, rung::ActiveRung) = count(id -> runs[id].status === Pending, rung.ids)
-_rung_has_failure(runs, rung::ActiveRung) = any(id -> runs[id].status === Failed, rung.ids)
+_rung_has_failure(runs, rung::ActiveRung) = any(id -> runs[id].status in (Failed, TimedOut), rung.ids)
 _told_sorted(runs, rung::ActiveRung) =
     sort([(id, runs[id].value) for id in rung.ids if runs[id].status === Completed]; by=last)
 _promoted_ids(runs, rung::ActiveRung) = Set(runs[id].metadata[:promoted_from] for id in rung.ids)

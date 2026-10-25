@@ -1,9 +1,9 @@
-@enum RunStatus Pending Completed Failed Abandoned
+@enum RunStatus Pending Completed Failed Abandoned TimedOut
 
 """
     RunEntry(id, params::NamedTuple, unit_params, metadata=Dict{Symbol,Any}(); pre_artefact=nothing)
 
-One trial: its hyperparameters `params` and their unit-interval encoding `unit_params`, sampler `metadata`, `status` (`Pending`, `Completed`, `Failed` or `Abandoned`), `value`, `error`, and the `pre_artefact` and `post_artefact` of a `Stateful` objective.
+One trial: its hyperparameters `params` and their unit-interval encoding `unit_params`, sampler `metadata`, `status` (`Pending`, `Completed`, `Failed`, `Abandoned` or `TimedOut`), `value`, `error`, and the `pre_artefact` and `post_artefact` of a `Stateful` objective.
 """
 struct RunEntry{P<:NamedTuple}
     id::Int
@@ -27,7 +27,7 @@ _with_result(entry::RunEntry, status::RunStatus, value, post_artefact; error=not
 """
     finalize_entry(entry::RunEntry, outcome) -> RunEntry
 
-Return `entry` with `outcome` recorded: a real number completes it, while `NaN`, any other value or an exception marks it `Failed`.
+Return `entry` with `outcome` recorded: a real number completes it, a `TrialTimeout` marks it `TimedOut`, and `NaN`, any other value or an exception marks it `Failed`.
 """
 function finalize_entry(entry::RunEntry, outcome::Real)
     if isnan(outcome)
@@ -53,6 +53,19 @@ end
 function finalize_entry(entry::RunEntry, outcome::ObjectiveOutcome)
     told = finalize_entry(entry, outcome.value)
     return _with_result(told, told.status, told.value, outcome.post_artefact; error=told.error)
+end
+
+"""
+    TrialTimeout(limit)
+
+Reported in place of an objective's result when its trial ran longer than `limit` seconds and was stopped.
+"""
+struct TrialTimeout
+    limit::Float64
+end
+function finalize_entry(entry::RunEntry, outcome::TrialTimeout)
+    @warn "Trial exceeded max_single_runtime of $(outcome.limit) s and was stopped; marking it timed out" params = entry.params
+    return _with_result(entry, TimedOut, missing, entry.post_artefact; error=outcome)
 end
 
 """
