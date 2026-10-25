@@ -78,7 +78,7 @@ end
 
 function _fetch_within(executor::DistributedQueue, future, worker::Int)
     isfinite(executor.max_single_runtime) || return fetch(future)
-    timed_out = Threads.Atomic{Bool}(false)
+    timed_out = Ref(false)
     timer = Timer(executor.max_single_runtime) do _
         timed_out[] = true
         try
