@@ -14,8 +14,8 @@ Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 BigHOPs = {path = ".."}
 
 [compat]
-AlgebraOfGraphics = "=0.10.9"
-CairoMakie = "=0.13.10"
+AlgebraOfGraphics = "0.12"
+CairoMakie = "0.15"
 DataFrames = "1.8.2"
 ProgressMeter = "1.7"
 StableRNGs = "1"
