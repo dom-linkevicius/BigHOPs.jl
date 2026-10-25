@@ -242,6 +242,27 @@ end
     @test_throws ArgumentError DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=NaN)
     @test DistributedQueue(1; spawn_worker=no_spawn).max_single_runtime == Inf
 
+    long_limit = DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=60.0)
+    failing = remotecall(() -> error("boom"), myid())
+    @test_throws RemoteException BigHOPs._fetch_within(long_limit, failing, myid())
+
+    short_limit = DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=0.5)
+    unresolved = Distributed.Future()
+    @async begin
+        sleep(2.0)
+        put!(unresolved, 42.0)
+    end
+    late = @test_logs (:warn, r"could not stop timed-out worker") BigHOPs._fetch_within(short_limit, unresolved, typemax(Int))
+    @test late == 42.0
+
+    idle = first(addprocs(1))
+    try
+        BigHOPs._kill_worker(idle, nothing, 30)
+        @test idle ∉ workers()
+    finally
+        rmprocs(filter(!=(1), workers()))
+    end
+
     @everywhere function dq_spin(p)
         p.a == 1 && return 1.0
         s = 0.0

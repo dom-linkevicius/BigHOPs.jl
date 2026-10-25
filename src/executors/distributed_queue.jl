@@ -66,15 +66,10 @@ function shutdown!(executor::DistributedQueue)
     return nothing
 end
 
-function _kill_worker(pid::Int, teardown_timeout::Real)
-    process = Distributed.worker_from_id(pid).config.process
-    if process isa Base.Process
-        kill(process)
-    else
-        Distributed.rmprocs(pid; waitfor=teardown_timeout)
-    end
-    return nothing
-end
+_kill_worker(pid::Int, teardown_timeout::Real) =
+    _kill_worker(pid, Distributed.worker_from_id(pid).config.process, teardown_timeout)
+_kill_worker(::Int, process::Base.Process, ::Real) = kill(process)
+_kill_worker(pid::Int, ::Nothing, teardown_timeout::Real) = Distributed.rmprocs(pid; waitfor=teardown_timeout)
 
 function _fetch_within(executor::DistributedQueue, future, worker::Int)
     isfinite(executor.max_single_runtime) || return fetch(future)
