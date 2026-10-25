@@ -1,6 +1,6 @@
 [deps]
 AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
-BigHOPs = "93e5fe13-2215-51db-baaf-2e9a34fb2712"
+BigHOPs = "bd33d1ee-3653-4952-9991-ee0e1cdcfc3b"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
 Distributions = "31c24e10-a181-5473-b8eb-7969acd0382f"
