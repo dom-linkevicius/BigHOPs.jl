@@ -232,3 +232,56 @@ BigHOPs.create_run_entry(::SequentialSampler, ho, id, params, unit) = BigHOPs.Ru
         rmprocs(filter(!=(1), workers()))
     end
 end
+
+@testset "DistributedQueue max_single_runtime" begin
+    @info "Testing that DistributedQueue kills a trial exceeding max_single_runtime and marks it TimedOut"
+
+    no_spawn() = error("should not be called")
+    @test_throws ArgumentError DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=0)
+    @test_throws ArgumentError DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=-1)
+    @test_throws ArgumentError DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=NaN)
+    @test DistributedQueue(1; spawn_worker=no_spawn).max_single_runtime == Inf
+
+    @everywhere function dq_spin(p)
+        p.a == 1 && return 1.0
+        s = 0.0
+        while true
+            s += sin(s) + 1.0
+        end
+        return s
+    end
+    spin_spawned = Int[]
+    function spin_spawn_worker()
+        pid = first(addprocs(1))
+        push!(spin_spawned, pid)
+        return pid
+    end
+    spin_setup_worker(pid) = Distributed.remotecall_eval(Main, [pid], :(begin
+        using BigHOPs
+        function dq_spin(p)
+            p.a == 1 && return 1.0
+            s = 0.0
+            while true
+                s += sin(s) + 1.0
+            end
+            return s
+        end
+    end))
+
+    limit = 15.0
+    try
+        ex = DistributedQueue(2; spawn_worker=spin_spawn_worker, setup_worker=spin_setup_worker, max_single_runtime=limit)
+        ho = Hyperoptimizer(dq_spin, (a=Nominal([1, 2]),); sampler=SequentialSampler(), n=2)
+        @test_logs (:warn, r"max_single_runtime") match_mode = :any run!(ho; executor=ex, show_progress=false)
+        @test ho.status == BigHOPs.Finished
+        @test ho.n_pending == 0
+        @test ho.runs[1].status == BigHOPs.Completed
+        @test ho.runs[1].value == 1.0
+        @test ho.runs[2].status == BigHOPs.TimedOut
+        @test ho.runs[2].error == BigHOPs.TrialTimeout(limit)
+        @test length(spin_spawned) == 2
+        @test isempty(intersect(spin_spawned, workers()))
+    finally
+        rmprocs(filter(!=(1), workers()))
+    end
+end

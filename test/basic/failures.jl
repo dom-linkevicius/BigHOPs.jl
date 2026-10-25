@@ -50,3 +50,35 @@
     @test occursin("a = 777", log_text)
     @test occursin("b = 888", log_text)
 end
+
+@testset "TimedOut trials" begin
+    @info "Testing that a TrialTimeout outcome marks a trial TimedOut, and how samplers and checkpoints treat it"
+
+    entry = BigHOPs.RunEntry(1, (a=1,), [0.5])
+    told = @test_logs (:warn, r"max_single_runtime") BigHOPs.finalize_entry(entry, BigHOPs.TrialTimeout(2.5))
+    @test told.status == BigHOPs.TimedOut
+    @test told.value === missing
+    @test told.error == BigHOPs.TrialTimeout(2.5)
+
+    ho = Hyperoptimizer(nothing, (a=Continuous(0, 1),), Hyperband(R=3, η=3, r_min=1))
+    first_rung = [BigHOPs.ask!(ho) for _ in 1:3]
+    @test all(e -> e.params.r == 1, first_rung)
+    BigHOPs.tell!(ho, first_rung[1], 0.3)
+    BigHOPs.tell!(ho, first_rung[2], 0.1)
+    @test_logs (:warn, r"max_single_runtime") BigHOPs.tell!(ho, first_rung[3], BigHOPs.TrialTimeout(2.5))
+    @test ho.n_pending == 0
+    @test BigHOPs._rung_has_failure(ho.runs, first(ho.sampler.active_brackets).rungs[1])
+
+    promoted = BigHOPs.ask!(ho)
+    @test promoted.params.r == 3
+    @test promoted.metadata[:promoted_from] == first_rung[2].id
+    BigHOPs.tell!(ho, promoted, 0.05)
+
+    mktempdir() do dir
+        path = joinpath(dir, "timed_out.jld2")
+        save_hyperoptimizer(ho, path)
+        loaded = load_hyperoptimizer(nothing, path)
+        @test loaded.runs[first_rung[3].id].status == BigHOPs.TimedOut
+        @test loaded.runs[first_rung[3].id].error == BigHOPs.TrialTimeout(2.5)
+    end
+end
