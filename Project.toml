@@ -22,10 +22,10 @@ CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 BigHOPsMakieExt = ["CairoMakie", "AlgebraOfGraphics"]
 
 [compat]
-AlgebraOfGraphics = "0.10"
-CairoMakie = "0.13"
+AlgebraOfGraphics = "0.12"
+CairoMakie = "0.15"
 DataFrames = "1.7"
-JLD2 = "0.5"
+JLD2 = "0.6"
 ProgressMeter = "1.7"
 QuasiMonteCarlo = "0.3"
 StableRNGs = "1"
