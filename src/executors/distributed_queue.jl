@@ -8,18 +8,18 @@ mutable struct DistributedQueue <: AbstractExecutor
     spawn_worker::Any
     setup_worker::Any
     teardown_timeout::Real
-    max_single_runtime::Real
+    max_single_runtime::Any
     results::Channel{Tuple{RunEntry,Any}}
     in_flight::Int
     pending_exception::Union{Exception,Nothing}
     tasks::Vector{Tuple{Int,Task}}
 
-    function DistributedQueue(max_concurrency::Int, spawn_worker, setup_worker, teardown_timeout::Real, max_single_runtime::Real, results::Channel{Tuple{RunEntry,Any}}, in_flight::Int, pending_exception::Union{Exception,Nothing}, tasks::Vector{Tuple{Int,Task}})
+    function DistributedQueue(max_concurrency::Int, spawn_worker, setup_worker, teardown_timeout::Real, max_single_runtime, results::Channel{Tuple{RunEntry,Any}}, in_flight::Int, pending_exception::Union{Exception,Nothing}, tasks::Vector{Tuple{Int,Task}})
         max_concurrency >= 1 || throw(ArgumentError("max_concurrency must be >= 1, got $max_concurrency"))
         teardown_timeout > 0 ||
             throw(ArgumentError("teardown_timeout must be a positive number of seconds (got $teardown_timeout) -- 0 disables Distributed.rmprocs's blocking wait entirely, silently reinstating an unbounded worker_lock hold"))
-        max_single_runtime > 0 ||
-            throw(ArgumentError("max_single_runtime must be a positive number of seconds, or Inf for no limit (got $max_single_runtime)"))
+        max_single_runtime isa Real && !(max_single_runtime > 0) &&
+            throw(ArgumentError("max_single_runtime must be a positive number of seconds, Inf for no limit, or a function of a trial's parameters returning one (got $max_single_runtime)"))
         return new(max_concurrency, spawn_worker, setup_worker, teardown_timeout, max_single_runtime, results, in_flight, pending_exception, tasks)
     end
 end
@@ -29,9 +29,9 @@ end
 - `spawn_worker()`: start one worker and return its process id, e.g. `() -> first(addprocs(1))`.
 - `setup_worker(pid)`: prepare that worker before its trial, e.g. load packages and define the objective there.
 - `teardown_timeout`: seconds to wait when removing a worker.
-- `max_single_runtime`: seconds a trial's objective may run before its worker is killed and the trial marked `TimedOut`; the default `Inf` sets no limit.
+- `max_single_runtime`: seconds a trial's objective may run before its worker is killed and the trial marked `TimedOut`; the default `Inf` sets no limit. Also accepts a function of the trial's parameters, e.g. `p -> 30 + 20 * p.r` to scale with a successive-halving resource level; if it throws or returns a non-positive limit, that trial fails.
 """
-function DistributedQueue(max_concurrency::Int=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout::Real=30, max_single_runtime::Real=Inf)
+function DistributedQueue(max_concurrency::Int=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout::Real=30, max_single_runtime=Inf)
     return DistributedQueue(max_concurrency, spawn_worker, setup_worker, teardown_timeout, max_single_runtime, Channel{Tuple{RunEntry,Any}}(Inf), 0, nothing, Tuple{Int,Task}[])
 end
 
@@ -71,13 +71,23 @@ _kill_worker(pid::Int, teardown_timeout::Real) =
 _kill_worker(::Int, process::Base.Process, ::Real) = kill(process)
 _kill_worker(pid::Int, ::Nothing, teardown_timeout::Real) = Distributed.rmprocs(pid; waitfor=teardown_timeout)
 
-function _fetch_within(executor::DistributedQueue, future, worker::Int)
-    isfinite(executor.max_single_runtime) || return fetch(future)
+_limit_for(limit::Real, _) = limit
+_limit_for(limit, params) = limit(params)
+
+function _trial_limit(executor::DistributedQueue, entry::RunEntry)
+    limit = _limit_for(executor.max_single_runtime, entry.params)
+    limit isa Real && limit > 0 ||
+        throw(ArgumentError("max_single_runtime gave $limit for $(entry.params); it must be a positive number of seconds, or Inf"))
+    return limit
+end
+
+function _fetch_within(limit::Real, future, worker::Int, teardown_timeout::Real)
+    isfinite(limit) || return fetch(future)
     timed_out = Ref(false)
-    timer = Timer(executor.max_single_runtime) do _
+    timer = Timer(limit) do _
         timed_out[] = true
         try
-            _kill_worker(worker, executor.teardown_timeout)
+            _kill_worker(worker, teardown_timeout)
         catch e
             @warn "could not stop timed-out worker $worker" error = e
         end
@@ -85,7 +95,7 @@ function _fetch_within(executor::DistributedQueue, future, worker::Int)
     try
         return fetch(future)
     catch
-        timed_out[] && return TrialTimeout(executor.max_single_runtime)
+        timed_out[] && return TrialTimeout(limit)
         rethrow()
     finally
         close(timer)
@@ -94,6 +104,16 @@ end
 
 function submit!(executor::DistributedQueue, entry::RunEntry, f)
     executor.in_flight += 1
+    limit = try
+        _trial_limit(executor, entry)
+    catch e
+        @warn "max_single_runtime could not give this trial a limit" params = entry.params error = e
+        e
+    end
+    if limit isa Exception
+        put!(executor.results, (entry, limit))
+        return nothing
+    end
     worker = try
         executor.spawn_worker()
     catch e
@@ -108,7 +128,7 @@ function submit!(executor::DistributedQueue, entry::RunEntry, f)
         outcome = try
             executor.setup_worker(worker)
             future = Distributed.remotecall(safe_call, worker, f, entry.params, entry.pre_artefact)
-            _fetch_within(executor, future, worker)
+            _fetch_within(limit, future, worker, executor.teardown_timeout)
         catch e
             @warn "setup_worker() or objective errored" error = e
             e

@@ -242,13 +242,29 @@ end
     @test_throws ArgumentError DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=NaN)
     @test DistributedQueue(1; spawn_worker=no_spawn).max_single_runtime == Inf
 
-    short_limit = DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=0.5)
+    entry = BigHOPs.RunEntry(1, (a=1,), Float64[])
+    scaled = DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=p -> 30 + 20 * p.r)
+    @test BigHOPs._trial_limit(scaled, BigHOPs.RunEntry(1, (r=3, a=1), Float64[])) == 90
+    @test BigHOPs._trial_limit(DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=5.0), entry) == 5.0
+    for bad in (_ -> 0, _ -> -1.0, _ -> NaN, _ -> "soon")
+        @test_throws ArgumentError BigHOPs._trial_limit(DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=bad), entry)
+    end
+    @test_throws ErrorException BigHOPs._trial_limit(DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=_ -> error("no limit")), entry)
+
+    bad_limit = DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=_ -> -1.0)
+    BigHOPs.start!(bad_limit, nothing)
+    @test_logs (:warn, r"could not give this trial a limit") BigHOPs.submit!(bad_limit, entry, _ -> 0.0)
+    rejected = BigHOPs.poll(bad_limit)
+    @test length(rejected) == 1
+    @test rejected[1][2] isa ArgumentError
+    @test BigHOPs.capacity(bad_limit) == 1
+
     unresolved = Distributed.Future()
     @async begin
         sleep(2.0)
         put!(unresolved, 42.0)
     end
-    late = @test_logs (:warn, r"could not stop timed-out worker") BigHOPs._fetch_within(short_limit, unresolved, typemax(Int))
+    late = @test_logs (:warn, r"could not stop timed-out worker") BigHOPs._fetch_within(0.5, unresolved, typemax(Int), 30)
     @test late == 42.0
 
     try
@@ -256,9 +272,8 @@ end
         BigHOPs._kill_worker(idle, nothing, 30)
         @test idle ∉ workers()
 
-        long_limit = DistributedQueue(1; spawn_worker=no_spawn, max_single_runtime=60.0)
         dying = first(addprocs(1))
-        @test_throws ProcessExitedException BigHOPs._fetch_within(long_limit, remotecall(exit, dying), dying)
+        @test_throws ProcessExitedException BigHOPs._fetch_within(60.0, remotecall(exit, dying), dying, 30)
     finally
         rmprocs(filter(!=(1), workers()))
     end
@@ -291,7 +306,8 @@ end
 
     limit = 15.0
     try
-        ex = DistributedQueue(2; spawn_worker=spin_spawn_worker, setup_worker=spin_setup_worker, max_single_runtime=limit)
+        ex = DistributedQueue(2; spawn_worker=spin_spawn_worker, setup_worker=spin_setup_worker,
+                              max_single_runtime=p -> p.a == 1 ? 60.0 : limit)
         ho = Hyperoptimizer(dq_spin, (a=Nominal([1, 2]),); sampler=SequentialSampler(), n=2)
         @test_logs (:warn, r"max_single_runtime") match_mode = :any run!(ho; executor=ex, show_progress=false)
         @test ho.status == BigHOPs.Finished
