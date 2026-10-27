@@ -173,3 +173,32 @@ end
         @test count(e -> e.status === BigHOPs.Abandoned, loaded.runs) == 2
     end
 end
+
+@testset "Checkpoints store trial errors as text" begin
+    @info "Testing that a trial error holding a Task is checkpointed as text and loads safely"
+
+    launch = @async error("simulated worker launch failure")
+    task_error = try
+        wait(launch)
+    catch e
+        e
+    end
+    @test task_error isa TaskFailedException
+
+    ho = Hyperoptimizer(nothing, (a=Nominal([1, 2]),); n=2)
+    failed = BigHOPs.ask!(ho)
+    @test_logs (:warn, r"non-Real") BigHOPs.tell!(ho, failed, task_error)
+    BigHOPs.tell!(ho, BigHOPs.ask!(ho), 1.0)
+
+    mktempdir() do dir
+        path = joinpath(dir, "errors.jld2")
+        @test_logs min_level = Logging.Warn save_hyperoptimizer(ho, path)
+        loaded = load_hyperoptimizer(nothing, path)
+        GC.gc()
+        @test loaded.runs[1].status == BigHOPs.Failed
+        @test loaded.runs[1].error isa String
+        @test occursin("simulated worker launch failure", loaded.runs[1].error)
+        @test loaded.runs[2].value == 1.0
+    end
+    @test ho.runs[1].error === task_error
+end
