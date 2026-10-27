@@ -19,18 +19,24 @@ function load_hyperoptimizer(objective, path::AbstractString)
                            saved.best_min_id, ReentrantLock())
 end
 
+_storable_error(e::Exception) = sprint(showerror, e)
+_storable_error(e) = e
+
+_storable(entry::RunEntry) = RunEntry(entry.id, entry.params, entry.unit_params, entry.metadata, entry.status,
+                                      entry.value, _storable_error(entry.error), entry.pre_artefact, entry.post_artefact)
+
 """
     save_hyperoptimizer(ho, path)
 
-Write `ho`, without its objective, to `path` as a JLD2 checkpoint. It is written to a temporary file first and then moved into place, so a crash mid-save leaves the previous checkpoint intact.
+Write `ho`, without its objective, to `path` as a JLD2 checkpoint, storing each trial's error as its printed text. It is written to a temporary file first and then moved into place, so a crash mid-save leaves the previous checkpoint intact.
 """
 function save_hyperoptimizer(ho::Hyperoptimizer, path::AbstractString)
-    sanitized = Hyperoptimizer(ho.params, ho.candidates, ho.sampler, nothing, ho.n,
-                                ho.runs, ho.completed, ho.n_pending, ho.status,
-                                ho.best_min_id, ReentrantLock())
+    state = (params=ho.params, candidates=ho.candidates, sampler=ho.sampler, n=ho.n,
+             runs=RunEntry[_storable(entry) for entry in ho.runs], completed=ho.completed, n_pending=ho.n_pending,
+             status=ho.status, best_min_id=ho.best_min_id)
     tmp_path = path * ".tmp"
     JLD2.jldopen(tmp_path, "w") do file
-        file["ho"] = sanitized
+        file["ho"] = state
     end
     mv(tmp_path, path; force=true)
     return nothing
