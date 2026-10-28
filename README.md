@@ -1,5 +1,6 @@
 # BigHOPs
 
+[![CI](https://github.com/dom-linkevicius/BigHOPs.jl/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/dom-linkevicius/BigHOPs.jl/actions/workflows/ci.yml?query=branch%3Amaster)
 [![codecov](https://codecov.io/gh/dom-linkevicius/BigHOPs.jl/graph/badge.svg)](https://codecov.io/gh/dom-linkevicius/BigHOPs.jl)
 
 ## Introduction
