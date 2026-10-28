@@ -316,8 +316,51 @@ end
         @test ho.runs[1].value == 1.0
         @test ho.runs[2].status == BigHOPs.TimedOut
         @test ho.runs[2].error == BigHOPs.TrialTimeout(limit)
+        @test ho.runs[2].metadata[:worker].host == gethostname()
         @test length(spin_spawned) == 2
         @test isempty(intersect(spin_spawned, workers()))
+    finally
+        rmprocs(filter(!=(1), workers()))
+    end
+end
+
+@testset "DistributedQueue worker_metadata" begin
+    @info "Testing that DistributedQueue records where each trial ran, plus any user-supplied worker details"
+
+    @everywhere dq_meta(p) = p.a + 1.0
+    meta_spawned = Int[]
+    function meta_spawn_worker()
+        pid = first(addprocs(1))
+        push!(meta_spawned, pid)
+        return pid
+    end
+    meta_setup_worker(pid) = Distributed.remotecall_eval(Main, [pid], :(begin
+        using BigHOPs
+        dq_meta(p) = p.a + 1.0
+    end))
+    meta_queue(worker_metadata) = DistributedQueue(1; spawn_worker=meta_spawn_worker, setup_worker=meta_setup_worker,
+                                                   worker_metadata=worker_metadata)
+
+    try
+        ho = Hyperoptimizer(dq_meta, (a=Nominal([1]),); n=1)
+        run!(ho; executor=meta_queue(() -> (tag=42,)), show_progress=false)
+        recorded = ho.runs[1].metadata[:worker]
+        @test ho.runs[1].status == BigHOPs.Completed
+        @test keys(recorded) == (:worker, :started, :host, :os_pid, :tag)
+        @test all(v -> v isa String, values(recorded))
+        @test recorded.worker == string(only(meta_spawned))
+        @test recorded.host == gethostname()
+        @test recorded.os_pid != string(getpid())
+        @test recorded.tag == "42"
+
+        for (broken, reason) in ((() -> error("no scheduler details"), "no scheduler details"),
+                                 (() -> Dict(:tag => 42), "must return a NamedTuple"))
+            ho_broken = Hyperoptimizer(dq_meta, (a=Nominal([1]),); n=1)
+            @test_logs (:warn, r"worker_metadata failed") match_mode = :any run!(ho_broken; executor=meta_queue(broken), show_progress=false)
+            @test ho_broken.runs[1].status == BigHOPs.Completed
+            @test keys(ho_broken.runs[1].metadata[:worker]) == (:worker, :started, :host, :os_pid, :metadata_recording_error)
+            @test occursin(reason, ho_broken.runs[1].metadata[:worker].metadata_recording_error)
+        end
     finally
         rmprocs(filter(!=(1), workers()))
     end
