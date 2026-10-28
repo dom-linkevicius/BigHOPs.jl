@@ -1,5 +1,5 @@
 """
-    DistributedQueue(max_concurrency=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout=30, max_single_runtime=Inf)
+    DistributedQueue(max_concurrency=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout=30, max_single_runtime=Inf, worker_metadata=Returns(NamedTuple()))
 
 Evaluate each trial on its own freshly spawned Distributed worker, up to `max_concurrency` at a time, removing the worker when the trial returns. Suited to clusters, where `spawn_worker` can request a process from a scheduler.
 """
@@ -9,30 +9,32 @@ mutable struct DistributedQueue <: AbstractExecutor
     setup_worker::Any
     teardown_timeout::Real
     max_single_runtime::Any
+    worker_metadata::Any
     results::Channel{Tuple{RunEntry,Any}}
     in_flight::Int
     pending_exception::Union{Exception,Nothing}
     tasks::Vector{Tuple{Int,Task}}
 
-    function DistributedQueue(max_concurrency::Int, spawn_worker, setup_worker, teardown_timeout::Real, max_single_runtime, results::Channel{Tuple{RunEntry,Any}}, in_flight::Int, pending_exception::Union{Exception,Nothing}, tasks::Vector{Tuple{Int,Task}})
+    function DistributedQueue(max_concurrency::Int, spawn_worker, setup_worker, teardown_timeout::Real, max_single_runtime, worker_metadata, results::Channel{Tuple{RunEntry,Any}}, in_flight::Int, pending_exception::Union{Exception,Nothing}, tasks::Vector{Tuple{Int,Task}})
         max_concurrency >= 1 || throw(ArgumentError("max_concurrency must be >= 1, got $max_concurrency"))
         teardown_timeout > 0 ||
             throw(ArgumentError("teardown_timeout must be a positive number of seconds (got $teardown_timeout) -- 0 disables Distributed.rmprocs's blocking wait entirely, silently reinstating an unbounded worker_lock hold"))
         max_single_runtime isa Real && !(max_single_runtime > 0) &&
             throw(ArgumentError("max_single_runtime must be a positive number of seconds, Inf for no limit, or a function of a trial's parameters returning one (got $max_single_runtime)"))
-        return new(max_concurrency, spawn_worker, setup_worker, teardown_timeout, max_single_runtime, results, in_flight, pending_exception, tasks)
+        return new(max_concurrency, spawn_worker, setup_worker, teardown_timeout, max_single_runtime, worker_metadata, results, in_flight, pending_exception, tasks)
     end
 end
 """
-    DistributedQueue(max_concurrency=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout=30, max_single_runtime=Inf)
+    DistributedQueue(max_concurrency=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout=30, max_single_runtime=Inf, worker_metadata=Returns(NamedTuple()))
 
 - `spawn_worker()`: start one worker and return its process id, e.g. `() -> first(addprocs(1))`.
 - `setup_worker(pid)`: prepare that worker before its trial, e.g. load packages and define the objective there.
 - `teardown_timeout`: seconds to wait when removing a worker.
 - `max_single_runtime`: seconds a trial's objective may run before its worker is killed and the trial marked `TimedOut`; the default `Inf` sets no limit. Also accepts a function of the trial's parameters, e.g. `p -> 30 + 20 * p.r` to scale with a successive-halving resource level; if it throws or returns a non-positive limit, that trial fails.
+- `worker_metadata()`: run on each trial's worker before its objective, returning a `NamedTuple` of extra details to record, e.g. `() -> (job = ENV["SLURM_JOB_ID"],)`. They are stored as text in the trial's `metadata[:worker]`, alongside the worker id, host, OS process id and start time; if it fails, the trial runs without them.
 """
-function DistributedQueue(max_concurrency::Int=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout::Real=30, max_single_runtime=Inf)
-    return DistributedQueue(max_concurrency, spawn_worker, setup_worker, teardown_timeout, max_single_runtime, Channel{Tuple{RunEntry,Any}}(Inf), 0, nothing, Tuple{Int,Task}[])
+function DistributedQueue(max_concurrency::Int=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout::Real=30, max_single_runtime=Inf, worker_metadata=Returns(NamedTuple()))
+    return DistributedQueue(max_concurrency, spawn_worker, setup_worker, teardown_timeout, max_single_runtime, worker_metadata, Channel{Tuple{RunEntry,Any}}(Inf), 0, nothing, Tuple{Int,Task}[])
 end
 
 function start!(executor::DistributedQueue, ho)
@@ -102,6 +104,23 @@ function _fetch_within(limit::Real, future, worker::Int, teardown_timeout::Real)
     end
 end
 
+_worker_basics() = (host=gethostname(), os_pid=getpid())
+
+function _record_worker!(executor::DistributedQueue, entry::RunEntry, worker::Int)
+    recorded = merge((worker=worker, started=Libc.strftime("%Y-%m-%d %H:%M:%S", time())),
+                     Distributed.remotecall_fetch(_worker_basics, worker))
+    extra = try
+        returned = Distributed.remotecall_fetch(executor.worker_metadata, worker)
+        returned isa NamedTuple || throw(ArgumentError("worker_metadata must return a NamedTuple, got $(typeof(returned))"))
+        returned
+    catch e
+        @warn "worker_metadata failed on worker $worker; running the trial without it" error = e
+        NamedTuple()
+    end
+    entry.metadata[:worker] = map(string, merge(recorded, extra))
+    return nothing
+end
+
 function submit!(executor::DistributedQueue, entry::RunEntry, f)
     executor.in_flight += 1
     limit = try
@@ -127,6 +146,7 @@ function submit!(executor::DistributedQueue, entry::RunEntry, f)
     t = @async begin
         outcome = try
             executor.setup_worker(worker)
+            _record_worker!(executor, entry, worker)
             future = Distributed.remotecall(safe_call, worker, f, entry.params, entry.pre_artefact)
             _fetch_within(limit, future, worker, executor.teardown_timeout)
         catch e
