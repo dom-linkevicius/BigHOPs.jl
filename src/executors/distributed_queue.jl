@@ -104,11 +104,11 @@ function _fetch_within(limit::Real, future, worker::Int, teardown_timeout::Real)
     end
 end
 
-_worker_basics() = (host=gethostname(), os_pid=getpid())
+_worker_basics() = (worker=Distributed.myid(), started=Libc.strftime("%Y-%m-%d %H:%M:%S", time()),
+                    host=gethostname(), os_pid=getpid())
 
 function _record_worker!(executor::DistributedQueue, entry::RunEntry, worker::Int)
-    recorded = merge((worker=worker, started=Libc.strftime("%Y-%m-%d %H:%M:%S", time())),
-                     Distributed.remotecall_fetch(_worker_basics, worker))
+    basics = Distributed.remotecall_fetch(_worker_basics, worker)
     extra = try
         returned = Distributed.remotecall_fetch(executor.worker_metadata, worker)
         returned isa NamedTuple || throw(ArgumentError("worker_metadata must return a NamedTuple, got $(typeof(returned))"))
@@ -117,7 +117,7 @@ function _record_worker!(executor::DistributedQueue, entry::RunEntry, worker::In
         @warn "worker_metadata failed on worker $worker; running the trial without it" error = e
         NamedTuple()
     end
-    entry.metadata[:worker] = map(string, merge(recorded, extra))
+    entry.metadata[:worker] = map(string, merge(basics, extra))
     return nothing
 end
 
