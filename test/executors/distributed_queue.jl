@@ -353,11 +353,13 @@ end
         @test recorded.os_pid != string(getpid())
         @test recorded.tag == "42"
 
-        for broken in (() -> error("no scheduler details"), () -> Dict(:tag => 42))
+        for (broken, reason) in ((() -> error("no scheduler details"), "no scheduler details"),
+                                 (() -> Dict(:tag => 42), "must return a NamedTuple"))
             ho_broken = Hyperoptimizer(dq_meta, (a=Nominal([1]),); n=1)
             @test_logs (:warn, r"worker_metadata failed") match_mode = :any run!(ho_broken; executor=meta_queue(broken), show_progress=false)
             @test ho_broken.runs[1].status == BigHOPs.Completed
-            @test keys(ho_broken.runs[1].metadata[:worker]) == (:worker, :started, :host, :os_pid)
+            @test keys(ho_broken.runs[1].metadata[:worker]) == (:worker, :started, :host, :os_pid, :metadata_recording_error)
+            @test occursin(reason, ho_broken.runs[1].metadata[:worker].metadata_recording_error)
         end
     finally
         rmprocs(filter(!=(1), workers()))

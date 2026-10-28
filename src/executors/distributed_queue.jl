@@ -31,7 +31,7 @@ end
 - `setup_worker(pid)`: prepare that worker before its trial, e.g. load packages and define the objective there.
 - `teardown_timeout`: seconds to wait when removing a worker.
 - `max_single_runtime`: seconds a trial's objective may run before its worker is killed and the trial marked `TimedOut`; the default `Inf` sets no limit. Also accepts a function of the trial's parameters, e.g. `p -> 30 + 20 * p.r` to scale with a successive-halving resource level; if it throws or returns a non-positive limit, that trial fails.
-- `worker_metadata()`: run on each trial's worker before its objective, returning a `NamedTuple` of extra details to record, e.g. `() -> (job = ENV["SLURM_JOB_ID"],)`. They are stored as text in the trial's `metadata[:worker]`, alongside the worker id, host, OS process id and start time; if it fails, the trial runs without them.
+- `worker_metadata()`: run on each trial's worker before its objective, returning a `NamedTuple` of extra details to record, e.g. `() -> (job = ENV["SLURM_JOB_ID"],)`. They are stored as text in the trial's `metadata[:worker]`, alongside the worker id, host, OS process id and start time; if it fails, the trial runs without them and the error is recorded as `metadata_recording_error`.
 """
 function DistributedQueue(max_concurrency::Int=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout::Real=30, max_single_runtime=Inf, worker_metadata=Returns(NamedTuple()))
     return DistributedQueue(max_concurrency, spawn_worker, setup_worker, teardown_timeout, max_single_runtime, worker_metadata, Channel{Tuple{RunEntry,Any}}(Inf), 0, nothing, Tuple{Int,Task}[])
@@ -115,7 +115,7 @@ function _record_worker!(executor::DistributedQueue, entry::RunEntry, worker::In
         returned
     catch e
         @warn "worker_metadata failed on worker $worker; running the trial without it" error = e
-        NamedTuple()
+        (metadata_recording_error=sprint(showerror, e),)
     end
     entry.metadata[:worker] = map(string, merge(basics, extra))
     return nothing
