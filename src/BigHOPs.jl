@@ -3,6 +3,7 @@ module BigHOPs
 export Hyperoptimizer, run!, settarget!
 export Stateful
 export RandomSampler, LHSampler
+export GPSampler, ThompsonSampling
 export Hyperband, ASHA, DEHB
 export Serial, Threaded, DistributedQueue
 export minimizer, history, results, printmin
@@ -25,6 +26,7 @@ include("basic/types.jl")
 include("samplers/sampler.jl")
 include("samplers/random.jl")
 include("samplers/lhs.jl")
+include("samplers/gp.jl")
 
 """
     BasicSamplers
