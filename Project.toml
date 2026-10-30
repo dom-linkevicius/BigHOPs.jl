@@ -16,13 +16,16 @@ Sobol = "ed01d8cd-4d21-5b2a-85b4-cc3bdc58bad4"
 StableRNGs = "860ef19b-820b-49d6-a774-d7a799459cd3"
 
 [weakdeps]
+AbstractGPs = "99985d1d-32ba-4be9-9821-2ec096f28918"
 AlgebraOfGraphics = "cbdf2221-f076-402e-a563-3d30da359d67"
 CairoMakie = "13f3f980-e62b-5c42-98c6-ff1f3baf88f0"
 
 [extensions]
+BigHOPsAbstractGPsExt = "AbstractGPs"
 BigHOPsMakieExt = ["CairoMakie", "AlgebraOfGraphics"]
 
 [compat]
+AbstractGPs = "0.5"
 AlgebraOfGraphics = "0.12"
 CairoMakie = "0.15"
 DataFrames = "1.7"

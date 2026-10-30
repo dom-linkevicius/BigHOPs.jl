@@ -4,6 +4,7 @@ export Hyperoptimizer, run!, settarget!
 export Stateful
 export RandomSampler, LHSampler
 export SobolSampler
+export GPSampler, ThompsonSampling
 export Hyperband, ASHA, DEHB
 export Serial, Threaded, DistributedQueue
 export minimizer, history, results, printmin
@@ -28,6 +29,7 @@ include("samplers/sampler.jl")
 include("samplers/random.jl")
 include("samplers/lhs.jl")
 include("samplers/sobol.jl")
+include("samplers/gp.jl")
 
 """
     BasicSamplers
