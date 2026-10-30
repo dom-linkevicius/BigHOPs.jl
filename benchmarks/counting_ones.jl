@@ -5,8 +5,8 @@ using StableRNGs: StableRNG
 using Statistics: median, quantile
 using JLD2
 
-const NCAT = 32
-const NCONT = 32
+const NCAT = parse(Int, get(ENV, "BIGHO_COUNTING_ONES_NCAT", "32"))
+const NCONT = parse(Int, get(ENV, "BIGHO_COUNTING_ONES_NCONT", "32"))
 const D = NCAT + NCONT
 
 const R_MIN = 9
@@ -79,7 +79,7 @@ function _curve(ho)
 end
 
 function curves_for(name::String, target::Float64)
-    path = joinpath(CACHEDIR, "counting_ones_$(name)_$(round(Int, target)).jld2")
+    path = joinpath(CACHEDIR, "counting_ones_$(D)d_$(name)_$(round(Int, target)).jld2")
     isfile(path) && return JLD2.load(path, "curves")
     curves = Vector{Tuple{Vector{Float64},Vector{Float64}}}()
     for repeat in 1:REPEATS
@@ -137,7 +137,7 @@ function plot_curves()
     ylims!(ax, 0.015, 0.5)
     axislegend(ax; position=:lb)
     mkpath(OUTDIR)
-    save(joinpath(OUTDIR, "counting_ones_regret.png"), fig)
+    save(joinpath(OUTDIR, "counting_ones_$(D)d_regret.png"), fig)
 end
 
 println("Counting Ones: per-iteration budget=$ITERATION_BUDGET, repeats=$REPEATS, cache=$CACHEDIR")

@@ -102,7 +102,7 @@ over 32 binary and 32 continuous hyperparameters, where the resource `b` is the 
 
 Each sampler is run 50 times. The cumulative budget / b_max varies by sampler — `RandomSampler` gets 10⁶, `Hyperband` and `DEHB` get 10⁴.
 
-![Stochastic Counting Ones](docs/benchmarks/counting_ones_regret.png)
+![Stochastic Counting Ones](docs/benchmarks/counting_ones_64d_regret.png)
 
 This qualitatively reproduces Figure 6 of the DEHB paper. `DEHB` pulls away from the other two at around 10² and has dropped by more than an order of magnitude by 10⁴, while `RandomSampler` has barely improved even two decades of budget later, at 10⁶.
 
