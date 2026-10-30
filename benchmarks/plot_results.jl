@@ -7,7 +7,7 @@ const OUTDIR = joinpath(@__DIR__, "..", "docs", "benchmarks")
 mkpath(OUTDIR)
 
 const REGRET_GRID_POINTS = 40
-const SAMPLER_NAMES = ("Random", "LHS", "Hyperband", "ASHA", "DEHB")
+const SAMPLER_NAMES = ("Random", "LHS", "Hyperband", "ASHA", "DEHB", "GP")
 const SAMPLER_COLORS = Dict(zip(SAMPLER_NAMES, Makie.wong_colors()))
 const SHA_SAMPLER_NAMES = ("Hyperband", "ASHA")
 const Y_UPPER_LIMIT = 0.11

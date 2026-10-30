@@ -2,6 +2,7 @@ using BigHOPs
 using JLD2
 
 include("nn_objective.jl")
+include("gp_sampler.jl")
 
 _log(msg) = (println(msg); flush(stdout))
 
@@ -35,7 +36,7 @@ end
 const PLAIN_OBJ = Stateful(nn_objective)
 const SH_OBJ = Stateful(nn_objective_stateful)
 
-const SAMPLER_NAMES = ("Random", "LHS", "Hyperband", "ASHA", "DEHB")
+const SAMPLER_NAMES = ("Random", "LHS", "Hyperband", "ASHA", "DEHB", "GP")
 const EXECUTORS = (Serial=Serial(), Threaded=Threaded())
 
 const SHA_INNER = RandomSampler()
@@ -46,6 +47,7 @@ const MAKE_HYPEROPTIMIZER = Dict(
     "Hyperband" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, Hyperband(R=R_MAX, η=ETA, r_min=R_MIN, inner=SHA_INNER)),
     "ASHA" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, ASHA(R=R_MAX, η=ETA, r_min=R_MIN, inner=SHA_INNER)),
     "DEHB" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, DEHB(R=R_MAX, η=ETA, r_min=R_MIN)),
+    "GP" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=gp_sampler(), n=N_TRIALS),
 )
 
 _log("Warming up (JIT compilation)...")
@@ -53,6 +55,9 @@ const WARMUP_OBJ = Stateful(_warmup_objective)
 const WARMUP_SH_OBJ = Stateful(_warmup_objective_stateful)
 for executor in EXECUTORS, sampler in (RandomSampler(), LHSampler())
     run!(Hyperoptimizer(WARMUP_OBJ, CANDIDATES; sampler=sampler, n=2); executor=executor, show_progress=false)
+end
+for executor in EXECUTORS
+    run!(Hyperoptimizer(WARMUP_OBJ, CANDIDATES; sampler=gp_sampler(), n=GP_N_INITIAL + 1); executor=executor, show_progress=false)
 end
 for sh_sampler in (Hyperband(R=1, η=3, r_min=1), ASHA(R=1, η=3, r_min=1), DEHB(R=3, η=3, r_min=1))
     run!(Hyperoptimizer(WARMUP_SH_OBJ, CANDIDATES, sh_sampler); executor=Serial(), show_progress=false)

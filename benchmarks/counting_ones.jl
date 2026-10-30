@@ -5,6 +5,8 @@ using StableRNGs: StableRNG
 using Statistics: median, quantile
 using JLD2
 
+include("gp_sampler.jl")
+
 const NCAT = 32
 const NCONT = 32
 const D = NCAT + NCONT
@@ -47,6 +49,7 @@ const SAMPLERS = (
     (name="Random", target=1e6, color=Makie.wong_colors()[1]),
     (name="Hyperband", target=1e4, color=Makie.wong_colors()[3]),
     (name="DEHB", target=1e4, color=Makie.wong_colors()[2]),
+    (name="GP", target=1e3, color=Makie.wong_colors()[4]),
 )
 
 function _make(name::String, target::Float64, seed::Int)
@@ -55,6 +58,8 @@ function _make(name::String, target::Float64, seed::Int)
     plain(p) = noisy_f(p, p.r)
     name == "Random" &&
         return Hyperoptimizer(full, CANDIDATES; sampler=RandomSampler(StableRNG(seed)), n=round(Int, target))
+    name == "GP" &&
+        return Hyperoptimizer(full, CANDIDATES; sampler=gp_sampler(StableRNG(seed)), n=round(Int, target))
     name == "Hyperband" &&
         return Hyperoptimizer(Stateful(sched), CANDIDATES,
                               Hyperband(R=R_MAX, η=ETA, r_min=R_MIN, iterations=_iterations(target),
