@@ -10,6 +10,8 @@ Model the objective as a Gaussian process over the unit-encoded hyperparameters,
 - `fit_hyperparams(X, y)`: return either the GP to condition on, e.g. one with refitted kernel hyperparameters, or a `(gp, noise)` pair to refit the noise variance too. When `nothing`, `gp` is used as given.
 - `standardize(y)`: transform the observed values before `fit_hyperparams` and conditioning; the default shifts and scales them to mean 0 and standard deviation 1. When `nothing`, they are used as given.
 
+`next_point`, `fit_hyperparams` and `standardize` are saved in checkpoints by name, so pass named functions or callable structs such as `ThompsonSampling`: an anonymous function is reloaded as whichever function carries its generated name in the new session.
+
 # Examples
 
 Two `fit_hyperparams` that maximize the likelihood on every tell, using Optim and Zygote, which BigHOPs does not depend on. `fit_kernel` refits one length scale per hyperparameter and the kernel variance and returns only a GP, so `noise` stays fixed; `fit_kernel_and_noise` also refits the noise variance and returns a `(gp, noise)` pair, so `noise` can be `nothing`. Both optimize logarithms within bounds, which keeps every value positive and stops the fit collapsing onto degenerate solutions while there are few trials:
