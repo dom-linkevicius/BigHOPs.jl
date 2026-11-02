@@ -24,7 +24,7 @@ function fit_kernel(X, y)
     return GP(kernel(exp.(v[1:d]), exp(v[d+1])))
 end
 
-sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(10; jitter=1e-6), noise=noise, n_initial=10,
+sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(1000; jitter=1e-6), noise=noise, n_initial=10,
                     fit_hyperparams=fit_kernel)
 ```
 
@@ -47,6 +47,6 @@ function fit_kernel_and_noise(X, y)
     return GP(kernel(exp.(v[1:d]), exp(v[d+1]))), exp(v[d+2])
 end
 
-sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(10; jitter=1e-6), noise=nothing, n_initial=10,
+sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(1000; jitter=1e-6), noise=nothing, n_initial=10,
                     fit_hyperparams=fit_kernel_and_noise)
 ```
