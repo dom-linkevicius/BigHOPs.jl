@@ -47,6 +47,14 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     run!(ho_negated; show_progress=false)
     @test last(raw) == [-e.value for e in ho_negated.runs]
 
+    mixed = (a=Continuous(-1, 3; transform=exp10), b=Ordinal([1, 10, 100]), c=Nominal([true, false]), d=Nominal([sin, exp, identity]))
+    ho_mixed = Hyperoptimizer(p -> p.d(p.b / 100) + log10(p.a)^2 + (p.c ? 0.0 : 1.0), mixed; sampler=gp_sampler(), n=20)
+    run!(ho_mixed; show_progress=false)
+    @test length(ho_mixed.completed) == 20
+    @test all(h -> 0.1 <= h.a <= 1000 && h.b in (1, 10, 100) && h.c isa Bool && h.d in (sin, exp, identity), history(ho_mixed))
+    show(devnull, ho_mixed)
+    printmin(devnull, ho_mixed)
+
     ho_prior = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=0), n=1)
     @test all(0 .<= ho_prior.sampler(ho_prior.candidates, ho_prior.runs) .<= 1)
 
@@ -64,5 +72,50 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
         run!(reloaded; show_progress=false)
         @test length(reloaded.runs) == 35
         @test count(e -> e.status == BigHOPs.Completed, reloaded.runs) == 35
+    end
+end
+
+@testset "GPSampler under the Threaded executor" begin
+    @info "Testing GPSampler under the Threaded executor"
+    seen = Int[]
+    sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(500; jitter=1e-6), noise=1e-6, n_initial=5,
+                        fit=(X, y) -> (push!(seen, length(X)); GP(Matern52Kernel())))
+    ho = Hyperoptimizer(gp_bowl, (x=Continuous(0.0, 1.0), y=Continuous(0.0, 1.0)); sampler=sampler, n=30)
+    run!(ho; executor=Threaded(8), show_progress=false)
+    @test length(ho.completed) == 30
+    @test ho.n_pending == 0
+    @test ho.status == BigHOPs.Finished
+    @test sort([e.id for e in ho.runs]) == collect(1:30)
+    @test seen == 1:30
+end
+
+@testset "GPSampler under the DistributedQueue executor" begin
+    @info "Testing GPSampler under the DistributedQueue executor"
+
+    @everywhere using BigHOPs
+    @everywhere gp_dq_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
+
+    gp_dq_spawn_worker() = first(addprocs(1))
+    function gp_dq_setup_worker(pid)
+        Distributed.remotecall_eval(Main, [pid], :(begin
+            using BigHOPs
+            gp_dq_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
+        end))
+        return nothing
+    end
+
+    try
+        seen = Int[]
+        sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(500; jitter=1e-6), noise=1e-6, n_initial=3,
+                            fit=(X, y) -> (push!(seen, length(X)); GP(Matern52Kernel())))
+        ho = Hyperoptimizer(gp_dq_bowl, (x=Continuous(0.0, 1.0), y=Continuous(0.0, 1.0)); sampler=sampler, n=8)
+        run!(ho; executor=DistributedQueue(3; spawn_worker=gp_dq_spawn_worker, setup_worker=gp_dq_setup_worker), show_progress=false)
+        @test length(ho.completed) == 8
+        @test ho.n_pending == 0
+        @test ho.status == BigHOPs.Finished
+        @test sort([e.id for e in ho.runs]) == collect(1:8)
+        @test seen == 1:8
+    finally
+        rmprocs(filter(!=(1), workers()))
     end
 end
