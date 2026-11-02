@@ -12,7 +12,7 @@ Model the objective as a Gaussian process over the unit-encoded hyperparameters,
 - `standardize(y)`: transform the observed values before `fit_hyperparams` and conditioning; the default shifts and scales them to mean 0 and standard deviation 1. When `nothing`, they are used as given.
 - `strict_initialization`: when `false`, each initial trial that does not complete gets an extra trial from `initial` instead, with a warning, until `n_initial` have completed; the unsuccessful ones stay in the results, and new proposals wait only while the initial trials still running could complete the set.
 
-`next_point`, `fit_hyperparams` and `standardize` are saved in checkpoints by name, so pass named functions or callable structs such as `ThompsonSampling`: an anonymous function is reloaded as whichever function carries its generated name in the new session.
+`next_point`, `fit_hyperparams` and `standardize` are saved in checkpoints by name, so pass named functions or callable structs such as `ThompsonSampling`.
 
 # Examples
 
