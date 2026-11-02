@@ -25,7 +25,9 @@ The package implements three different executors, meant for different scenarios:
 ### Samplers
 The package currently implements the following samplers:
 - `RandomSampler`, which selects the parameters randomly
-- `LHSampler`, which is a Latin Hypercube sampler, aiming to maximally spread out `n` samples in the parameter space
+- quasi-random samplers, which spread the samples over the parameter space more evenly than independent random draws:
+  - `LHSampler`, which is a Latin Hypercube sampler, aiming to maximally spread out `n` samples in the parameter space
+  - `SobolSampler`, which takes each sample as the next point of a randomly shifted Sobol sequence, so it needs no fixed number of samples and stays evenly spread as more are drawn
 - `Hyperband`, which runs brackets of trials, using a different number of resources to train them and promoting best trials within a bracket, until the bracket reaches its resource limit
 - `ASHA`, which is the asynchronous version of Hyperband, also running brackets, but not requiring the completion of a bracket before trials are promoted
 - `DEHB`, a modified version of `Hyperband` where, after the first bracket, trials are not simply promoted between rungs but undergo differential evolution and can reach a better ceiling on larger search spaces

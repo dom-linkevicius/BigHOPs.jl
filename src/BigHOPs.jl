@@ -3,6 +3,7 @@ module BigHOPs
 export Hyperoptimizer, run!, settarget!
 export Stateful
 export RandomSampler, LHSampler
+export SobolSampler
 export Hyperband, ASHA, DEHB
 export Serial, Threaded, DistributedQueue
 export minimizer, history, results, printmin
@@ -18,6 +19,7 @@ import JLD2
 import ProgressMeter
 import DataFrames
 import QuasiMonteCarlo
+import Sobol
 
 include("basic/domains.jl")
 include("basic/types.jl")
@@ -25,13 +27,14 @@ include("basic/types.jl")
 include("samplers/sampler.jl")
 include("samplers/random.jl")
 include("samplers/lhs.jl")
+include("samplers/sobol.jl")
 
 """
     BasicSamplers
 
-Samplers that draw each configuration directly: `RandomSampler` and `LHSampler`. These are the `inner` samplers `Hyperband` and `ASHA` accept.
+Samplers that draw each configuration directly: `RandomSampler`, `LHSampler` and `SobolSampler`. These are the `inner` samplers `Hyperband` and `ASHA` accept.
 """
-const BasicSamplers = Union{LHSampler,RandomSampler}
+const BasicSamplers = Union{LHSampler,RandomSampler,SobolSampler}
 
 include("samplers/sha_based/sh.jl")
 include("samplers/sha_based/synchronous.jl")
