@@ -9,6 +9,26 @@ Model the objective as a Gaussian process over the unit-encoded hyperparameters,
 - `n_initial`: how many trials are drawn uniformly at random before `next_point` is used.
 - `fit(X, y)`: return the GP to condition on, e.g. one with refitted kernel hyperparameters. When `nothing`, `gp` is used as given.
 - `standardize(y)`: transform the observed values before `fit` and conditioning; the default shifts and scales them to mean 0 and standard deviation 1. When `nothing`, they are used as given.
+
+# Examples
+
+A `fit` that refits one length scale per hyperparameter and the kernel variance by maximum likelihood on every tell, using Optim, ParameterHandling and Zygote, which BigHOPs does not depend on:
+
+```julia
+using BigHOPs, AbstractGPs, Optim, ParameterHandling, Zygote
+
+noise = 1e-4
+kernel(θ) = θ.variance * with_lengthscale(Matern52Kernel(), θ.lengthscales)
+
+function fit_gp(X, y)
+    flat, unflatten = value_flatten((lengthscales=positive(ones(length(first(X)))), variance=positive(1.0)))
+    nlml(v) = -logpdf(GP(kernel(unflatten(v)))(X, noise), y)
+    result = optimize(nlml, v -> only(Zygote.gradient(nlml, v)), flat, LBFGS(); inplace=false)
+    return GP(kernel(unflatten(Optim.minimizer(result))))
+end
+
+sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(1000; jitter=1e-6), noise=noise, n_initial=10, fit=fit_gp)
+```
 """
 struct GPSampler{T<:Random.AbstractRNG} <: Sampler
     gp::AbstractGP
