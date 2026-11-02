@@ -49,13 +49,7 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     @test_logs BigHOPs.ask!(ho_block)
     @test ho_block.sampler.posterior[] !== nothing
 
-    lhs_extra = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=1, initial=LHSampler(), strict_initialization=false), n=3)
-    only_initial = BigHOPs.ask!(lhs_extra)
-    with_logger(NullLogger()) do
-        BigHOPs.tell!(lhs_extra, only_initial, ErrorException("simulated failure"))
-    end
-    extra = @test_logs (:warn, r"drawing an extra initial trial") BigHOPs.ask!(lhs_extra)
-    @test all(0 .<= extra.unit_params .<= 1)
+    @test_throws ArgumentError gp_sampler(initial=LHSampler(), strict_initialization=false)
 
     ho_strict = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=2, strict_initialization=true), n=5)
     strict_trials = [BigHOPs.ask!(ho_strict) for _ in 1:2]
