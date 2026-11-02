@@ -39,6 +39,11 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     @test all(isapprox(ss, n - 1) for (n, _, ss) in seen[2:end])
     @test ho_fit.sampler.posterior[].prior === refitted
 
+    raw = Vector{Float64}[]
+    ho_raw = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(standardize=false, fit=(X, y) -> (push!(raw, copy(y)); refitted)), n=8)
+    run!(ho_raw; show_progress=false)
+    @test last(raw) == [e.value for e in ho_raw.runs]
+
     ho_prior = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=0), n=1)
     @test all(0 .<= ho_prior.sampler(ho_prior.candidates, ho_prior.runs) .<= 1)
 
