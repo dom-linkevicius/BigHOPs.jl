@@ -17,7 +17,7 @@ function counting_ones_candidates(ncat::Int, ncont::Int)
     return NamedTuple{(cat_keys..., cont_keys...)}((ntuple(_ -> Nominal([0, 1]), ncat)..., ntuple(_ -> Continuous(0, 1), ncont)...))
 end
 
-regret(value, d::Int) = (value + d) / d
+true_regret(p, d::Int) = 1 - sum(values(p)[(end-d+1):end]) / d
 
 function noisy_f(p, b::Int, ncat::Int, ncont::Int)
     v = values(p)
@@ -51,52 +51,38 @@ function _make(name::String, target::Float64, seed::Int, ncat::Int, ncont::Int)
                           DEHB(R=R_MAX, η=ETA, r_min=R_MIN, iterations=_iterations(target), rng=StableRNG(seed)))
 end
 
-function _curve(ho, d::Int)
-    spent, best, cum, seen = Float64[], Float64[], 0, Inf
-    for e in ho.runs
-        ismissing(e.value) && continue
-        cum += get(e.params, :r, R_MAX)
-        seen = min(seen, e.value)
-        push!(spent, cum / R_MAX)
-        push!(best, regret(seen, d))
-    end
-    return spent, best
-end
-
-const GRID = exp10.(range(-2, 6; length=160))
-
-function _on_grid(spent, best)
-    out, j = fill(NaN, length(GRID)), 0
-    for (i, g) in enumerate(GRID)
-        while j < length(spent) && spent[j+1] <= g
-            j += 1
-        end
-        if j > 0 && g <= spent[end]
-            out[i] = best[j]
-        end
-    end
-    return out
+function _trials(ho, d::Int)
+    told = filter(e -> !ismissing(e.value), ho.runs)
+    return (r=UInt16[get(e.params, :r, R_MAX) for e in told], value=Float32[e.value for e in told],
+            true_regret=Float32[true_regret(e.params, d) for e in told])
 end
 
 function run_counting_ones(name::String, target::Float64; ncat::Int, ncont::Int, repeats::Int)
     path = results_path(ncat, ncont, name)
-    if isfile(path)
-        println("$name, $ncat + $ncont: results already in $path -- delete the file to rerun")
-        return nothing
+    mkpath(RESULTS_DIR)
+    if !isfile(path)
+        JLD2.jldopen(path, "w") do file
+            file["ncat"] = ncat
+            file["ncont"] = ncont
+            file["target"] = target
+            file["r_max"] = R_MAX
+        end
     end
-    curves = Matrix{Float64}(undef, repeats, length(GRID))
     for repeat in 1:repeats
+        key = "repeat_$repeat"
+        JLD2.jldopen(file -> haskey(file, key), path, "r") && continue
         ho = _make(name, target, repeat, ncat, ncont)
         elapsed = @elapsed run!(ho; executor=Serial(), show_progress=false)
-        spent, best = _curve(ho, ncat + ncont)
-        curves[repeat, :] = _on_grid(spent, best)
-        println("$name repeat=$repeat  $(round(elapsed; digits=1))s  trials=$(length(ho.runs))  " *
-                "budget/b_max=$(round(spent[end]; digits=1))  final regret=$(round(best[end]; digits=5))")
+        trials = _trials(ho, ncat + ncont)
+        JLD2.jldopen(path, "a+") do file
+            file[key] = trials
+        end
+        println("$name repeat=$repeat  $(round(elapsed; digits=1))s  trials=$(length(trials.r))  " *
+                "budget/b_max=$(round(sum(Float64, trials.r) / R_MAX; digits=1))  " *
+                "best measured regret=$(round((minimum(trials.value) + ncat + ncont) / (ncat + ncont); digits=5))")
         flush(stdout)
         ho = nothing
         GC.gc()
     end
-    mkpath(RESULTS_DIR)
-    JLD2.save(path, "grid", GRID, "curves", curves, "target", target)
     return nothing
 end
