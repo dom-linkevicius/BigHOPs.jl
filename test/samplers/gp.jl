@@ -19,6 +19,18 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     @test !BigHOPs.exhausted(ho.sampler, ho)
     @test !BigHOPs.blocked(ho.sampler, ho)
 
+    ho_block = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=2), n=5)
+    first_trial = BigHOPs.ask!(ho_block)
+    @test !BigHOPs.blocked(ho_block.sampler, ho_block)
+    second_trial = BigHOPs.ask!(ho_block)
+    @test BigHOPs.blocked(ho_block.sampler, ho_block)
+    BigHOPs.tell!(ho_block, first_trial, 1.0)
+    @test BigHOPs.blocked(ho_block.sampler, ho_block)
+    with_logger(NullLogger()) do
+        BigHOPs.tell!(ho_block, second_trial, ErrorException("simulated failure"))
+    end
+    @test !BigHOPs.blocked(ho_block.sampler, ho_block)
+
     ho_random = Hyperoptimizer(gp_bowl, candidates; sampler=RandomSampler(StableRNG(1)), n=30)
     run!(ho_random; show_progress=false)
     @test minimum(ho) < 1e-3
@@ -103,6 +115,19 @@ end
     @test ho.status == BigHOPs.Finished
     @test sort([e.id for e in ho.runs]) == collect(1:30)
     @test seen == 1:30
+
+    resolved_when_asked = Int[]
+    ho_ref = Ref{Any}()
+    function recording_next_point(post, d, rng)
+        push!(resolved_when_asked, count(e -> e.status !== BigHOPs.Pending, view(ho_ref[].runs, 1:5)))
+        return rand(rng, d)
+    end
+    slow_bowl(p) = (sleep(0.05 * rand()); gp_bowl(p))
+    ho_ref[] = Hyperoptimizer(slow_bowl, (x=Continuous(0.0, 1.0), y=Continuous(0.0, 1.0));
+                              sampler=GPSampler(GP(Matern52Kernel()); next_point=recording_next_point, noise=1e-6, n_initial=5), n=20)
+    run!(ho_ref[]; executor=Threaded(8), show_progress=false)
+    @test length(resolved_when_asked) == 15
+    @test all(==(5), resolved_when_asked)
 end
 
 @testset "GPSampler under the DistributedQueue executor" begin

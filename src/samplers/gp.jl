@@ -6,7 +6,7 @@ Model the objective as a Gaussian process over the unit-encoded hyperparameters,
 - `gp`: an AbstractGPs prior, e.g. `GP(Matern52Kernel())`.
 - `next_point(posterior, d, rng)`: return the next trial as a point in `[0, 1]^d`, e.g. `ThompsonSampling`.
 - `noise`: the observation noise variance, or `nothing` when `fit_hyperparams` returns one. A noise returned by `fit_hyperparams` replaces it, with a warning the first time if it was a number; the one in use is `ho.sampler.noise[]`.
-- `n_initial`: how many trials are drawn uniformly at random before `next_point` is used.
+- `n_initial`: how many trials are drawn uniformly at random before `next_point` is used. Once all of them have been asked, no further trial is proposed while any of them is still running.
 - `fit_hyperparams(X, y)`: return either the GP to condition on, e.g. one with refitted kernel hyperparameters, or a `(gp, noise)` pair to refit the noise variance too. When `nothing`, `gp` is used as given.
 - `standardize(y)`: transform the observed values before `fit_hyperparams` and conditioning; the default shifts and scales them to mean 0 and standard deviation 1. When `nothing`, they are used as given.
 
@@ -51,13 +51,12 @@ fitted_noise = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(1000;
 struct GPSampler{T<:Random.AbstractRNG} <: Sampler
     gp::AbstractGP
     next_point::Any
-    initial_noise::Union{Nothing,Float64}
     noise::Base.RefValue{Union{Nothing,Float64}}
     n_initial::Int
     fit_hyperparams::Any
     standardize::Any
     rng::T
-    posterior::Base.RefValue{AbstractGP}
+    posterior::Base.RefValue{Union{Nothing,AbstractGP}}
 end
 
 function GPSampler(gp::AbstractGP; next_point, noise::Union{Nothing,Real}, n_initial::Int, fit_hyperparams=nothing, standardize=zscore, rng::Random.AbstractRNG=StableRNG(1))
@@ -65,12 +64,12 @@ function GPSampler(gp::AbstractGP; next_point, noise::Union{Nothing,Real}, n_ini
     noise === nothing && fit_hyperparams === nothing &&
         throw(ArgumentError("noise can only be nothing when fit_hyperparams returns a (gp, noise) pair"))
     n_initial >= 0 || throw(ArgumentError("n_initial must be >= 0, got $n_initial"))
-    return GPSampler(gp, next_point, noise, Ref{Union{Nothing,Float64}}(noise), n_initial, fit_hyperparams, standardize, rng, Ref{AbstractGP}(gp))
+    return GPSampler(gp, next_point, Ref{Union{Nothing,Float64}}(noise), n_initial, fit_hyperparams, standardize, rng, Ref{Union{Nothing,AbstractGP}}(nothing))
 end
 
 function (s::GPSampler)(candidates, runs)
     length(runs) < s.n_initial && return rand(s.rng, length(candidates))
-    return s.next_point(s.posterior[], length(candidates), s.rng)
+    return s.next_point(something(s.posterior[], s.gp), length(candidates), s.rng)
 end
 
 function zscore(y)
@@ -86,7 +85,7 @@ end
 
 function _fitted!(s::GPSampler, (gp, noise)::Tuple{AbstractGP,Real})
     noise >= 0 || throw(ArgumentError("fit_hyperparams returned a negative noise variance, $noise"))
-    s.initial_noise === nothing || @warn "noise=$(s.initial_noise) is replaced by the noise fit_hyperparams returns" maxlog = 1 _id = objectid(s.noise)
+    s.posterior[] === nothing && s.noise[] !== nothing && @warn "noise=$(s.noise[]) is replaced by the noise fit_hyperparams returns"
     s.noise[] = noise
     return gp
 end
@@ -105,9 +104,9 @@ function on_tell!(s::GPSampler, runs, entry::RunEntry)
     return nothing
 end
 
-init(s::GPSampler, candidates, n) = GPSampler(s.gp, s.next_point, s.initial_noise, Ref{Union{Nothing,Float64}}(s.initial_noise), s.n_initial, s.fit_hyperparams, s.standardize, s.rng, Ref{AbstractGP}(s.gp))
+init(s::GPSampler, candidates, n) = GPSampler(s.gp, s.next_point, Ref{Union{Nothing,Float64}}(s.noise[]), s.n_initial, s.fit_hyperparams, s.standardize, s.rng, Ref{Union{Nothing,AbstractGP}}(nothing))
 exhausted(::GPSampler, ho) = false  # COV_EXCL_LINE
-blocked(::GPSampler, ho) = false  # COV_EXCL_LINE
+blocked(s::GPSampler, ho) = length(ho.runs) >= s.n_initial && any(e -> e.status === Pending, view(ho.runs, 1:s.n_initial))
 create_run_entry(::GPSampler, ho, id, params, unit_params) = RunEntry(id, params, unit_params)
 
 """
