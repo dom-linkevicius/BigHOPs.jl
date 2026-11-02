@@ -12,19 +12,20 @@ Model the objective as a Gaussian process over the unit-encoded hyperparameters,
 
 # Examples
 
-A `fit` that refits one length scale per hyperparameter and the kernel variance by maximum likelihood on every tell, using Optim, ParameterHandling and Zygote, which BigHOPs does not depend on:
+A `fit` that refits one length scale per hyperparameter and the kernel variance by maximum likelihood on every tell, using Optim and Zygote, which BigHOPs does not depend on. It optimizes their logarithms, so both stay strictly positive:
 
 ```julia
-using BigHOPs, AbstractGPs, Optim, ParameterHandling, Zygote
+using BigHOPs, AbstractGPs, Optim, Zygote
 
 noise = 1e-4
-kernel(θ) = θ.variance * with_lengthscale(Matern52Kernel(), θ.lengthscales)
+kernel(lengthscales, variance) = variance * with_lengthscale(Matern52Kernel(), lengthscales)
+from_log(v) = (exp.(v[1:end-1]), exp(v[end]))
 
 function fit_gp(X, y)
-    flat, unflatten = value_flatten((lengthscales=positive(ones(length(first(X)))), variance=positive(1.0)))
-    nlml(v) = -logpdf(GP(kernel(unflatten(v)))(X, noise), y)
-    result = optimize(nlml, v -> only(Zygote.gradient(nlml, v)), flat, LBFGS(); inplace=false)
-    return GP(kernel(unflatten(Optim.minimizer(result))))
+    nlml(v) = -logpdf(GP(kernel(from_log(v)...))(X, noise), y)
+    v0 = zeros(length(first(X)) + 1)
+    result = optimize(nlml, v -> only(Zygote.gradient(nlml, v)), v0, LBFGS(); inplace=false)
+    return GP(kernel(from_log(Optim.minimizer(result))...))
 end
 
 sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(1000; jitter=1e-6), noise=noise, n_initial=10, fit=fit_gp)
