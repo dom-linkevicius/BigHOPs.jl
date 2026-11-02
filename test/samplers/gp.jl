@@ -30,6 +30,12 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
         BigHOPs.tell!(ho_block, second_trial, ErrorException("simulated failure"))
     end
     @test !BigHOPs.blocked(ho_block.sampler, ho_block)
+    replacement = @test_logs (:warn, r"only 1 of the 2 initial trials have completed") BigHOPs.ask!(ho_block)
+    @test BigHOPs.blocked(ho_block.sampler, ho_block)
+    BigHOPs.tell!(ho_block, replacement, 2.0)
+    @test !BigHOPs.blocked(ho_block.sampler, ho_block)
+    @test_logs BigHOPs.ask!(ho_block)
+    @test ho_block.sampler.posterior[] !== nothing
 
     ho_random = Hyperoptimizer(gp_bowl, candidates; sampler=RandomSampler(StableRNG(1)), n=30)
     run!(ho_random; show_progress=false)
