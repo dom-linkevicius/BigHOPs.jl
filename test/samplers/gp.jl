@@ -14,8 +14,19 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
 
     ho = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(rng=StableRNG(1)), n=30)
     run!(ho; show_progress=false)
-    rng = StableRNG(1)
-    @test [e.unit_params for e in ho.runs[1:5]] == [rand(rng, 2) for _ in 1:5]
+    initial_points(ho, n) = [e.unit_params for e in ho.runs[1:n]]
+    sobol_alone = Hyperoptimizer(gp_bowl, candidates; sampler=SobolSampler(), n=5)
+    run!(sobol_alone; show_progress=false)
+    @test initial_points(ho, 5) == initial_points(sobol_alone, 5)
+
+    @test_throws TypeError gp_sampler(initial=thompson)
+    random_initial = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(initial=RandomSampler(StableRNG(7))), n=6)
+    run!(random_initial; show_progress=false)
+    rng = StableRNG(7)
+    @test initial_points(random_initial, 5) == [rand(rng, 2) for _ in 1:5]
+    lhs_initial = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(initial=LHSampler()), n=6)
+    run!(lhs_initial; show_progress=false)
+    @test all(dim -> sort(ceil.(Int, [u[dim] for u in initial_points(lhs_initial, 5)] .* 5)) == 1:5, 1:2)
     @test !BigHOPs.exhausted(ho.sampler, ho)
     @test !BigHOPs.blocked(ho.sampler, ho)
 
@@ -31,11 +42,20 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     end
     @test !BigHOPs.blocked(ho_block.sampler, ho_block)
     replacement = @test_logs (:warn, r"only 1 of the 2 initial trials have completed") BigHOPs.ask!(ho_block)
+    @test replacement.unit_params == sobol_alone.runs[3].unit_params
     @test BigHOPs.blocked(ho_block.sampler, ho_block)
     BigHOPs.tell!(ho_block, replacement, 2.0)
     @test !BigHOPs.blocked(ho_block.sampler, ho_block)
     @test_logs BigHOPs.ask!(ho_block)
     @test ho_block.sampler.posterior[] !== nothing
+
+    lhs_extra = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=1, initial=LHSampler(), strict_initialization=false), n=3)
+    only_initial = BigHOPs.ask!(lhs_extra)
+    with_logger(NullLogger()) do
+        BigHOPs.tell!(lhs_extra, only_initial, ErrorException("simulated failure"))
+    end
+    extra = @test_logs (:warn, r"drawing an extra initial trial") BigHOPs.ask!(lhs_extra)
+    @test all(0 .<= extra.unit_params .<= 1)
 
     ho_strict = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=2, strict_initialization=true), n=5)
     strict_trials = [BigHOPs.ask!(ho_strict) for _ in 1:2]

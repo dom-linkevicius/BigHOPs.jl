@@ -30,7 +30,6 @@ include("samplers/sampler.jl")
 include("samplers/random.jl")
 include("samplers/lhs.jl")
 include("samplers/sobol.jl")
-include("samplers/gp.jl")
 
 """
     BasicSamplers
@@ -38,6 +37,8 @@ include("samplers/gp.jl")
 Samplers that draw each configuration directly: `RandomSampler`, `LHSampler` and `SobolSampler`. These are the `inner` samplers `Hyperband` and `ASHA` accept.
 """
 const BasicSamplers = Union{LHSampler,RandomSampler,SobolSampler}
+
+include("samplers/gp.jl")
 
 include("samplers/sha_based/sh.jl")
 include("samplers/sha_based/synchronous.jl")
