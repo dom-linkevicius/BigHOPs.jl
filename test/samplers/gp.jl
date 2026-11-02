@@ -28,7 +28,7 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     refitted = GP(SqExponentialKernel())
     fit_recorder(X, y) = (push!(seen, (length(X), sum(y), sum(abs2, y))); refitted)
     gp_failing(p) = p.x > 0.5 ? error("simulated failure") : gp_bowl(p)
-    ho_fit = Hyperoptimizer(gp_failing, candidates; sampler=gp_sampler(fit=fit_recorder), n=20)
+    ho_fit = Hyperoptimizer(gp_failing, candidates; sampler=gp_sampler(fit_hyperparams=fit_recorder), n=20)
     with_logger(NullLogger()) do
         run!(ho_fit; show_progress=false)
     end
@@ -38,12 +38,28 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     @test all(abs(s) < 1e-8 for (_, s, _) in seen)
     @test all(isapprox(ss, n - 1) for (n, _, ss) in seen[2:end])
     @test ho_fit.sampler.posterior[].prior === refitted
+    @test ho_fit.sampler.noise[] == 1e-6
+
+    noise_sampler = gp_sampler(fit_hyperparams=(X, y) -> (refitted, 0.25))
+    ho_noise = Hyperoptimizer(gp_bowl, candidates; sampler=noise_sampler, n=8)
+    @test_logs (:warn, r"noise=1.0e-6 is replaced") run!(ho_noise; show_progress=false)
+    @test ho_noise.sampler.noise[] == 0.25
+    @test noise_sampler.noise[] == 1e-6
+
+    fitted_noise(fit_hyperparams) = GPSampler(GP(Matern52Kernel()); next_point=thompson, noise=nothing, n_initial=5, fit_hyperparams)
+    @test_throws ArgumentError GPSampler(GP(Matern52Kernel()); next_point=thompson, noise=nothing, n_initial=5)
+    ho_nothing = Hyperoptimizer(gp_bowl, candidates; sampler=fitted_noise((X, y) -> (refitted, 0.25)), n=8)
+    @test_logs run!(ho_nothing; show_progress=false)
+    @test ho_nothing.sampler.noise[] == 0.25
+    for bad_fit in ((X, y) -> refitted, (X, y) -> (refitted, -1.0), (X, y) -> (refitted, 0.25, 1))
+        @test_throws ArgumentError run!(Hyperoptimizer(gp_bowl, candidates; sampler=fitted_noise(bad_fit), n=2); show_progress=false)
+    end
 
     raw = Vector{Float64}[]
-    ho_raw = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(standardize=nothing, fit=(X, y) -> (push!(raw, copy(y)); refitted)), n=8)
+    ho_raw = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(standardize=nothing, fit_hyperparams=(X, y) -> (push!(raw, copy(y)); refitted)), n=8)
     run!(ho_raw; show_progress=false)
     @test last(raw) == [e.value for e in ho_raw.runs]
-    ho_negated = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(standardize=y -> -y, fit=(X, y) -> (push!(raw, copy(y)); refitted)), n=8)
+    ho_negated = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(standardize=y -> -y, fit_hyperparams=(X, y) -> (push!(raw, copy(y)); refitted)), n=8)
     run!(ho_negated; show_progress=false)
     @test last(raw) == [-e.value for e in ho_negated.runs]
 
@@ -79,7 +95,7 @@ end
     @info "Testing GPSampler under the Threaded executor"
     seen = Int[]
     sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(500; jitter=1e-6), noise=1e-6, n_initial=5,
-                        fit=(X, y) -> (push!(seen, length(X)); GP(Matern52Kernel())))
+                        fit_hyperparams=(X, y) -> (push!(seen, length(X)); GP(Matern52Kernel())))
     ho = Hyperoptimizer(gp_bowl, (x=Continuous(0.0, 1.0), y=Continuous(0.0, 1.0)); sampler=sampler, n=30)
     run!(ho; executor=Threaded(8), show_progress=false)
     @test length(ho.completed) == 30
@@ -107,7 +123,7 @@ end
     try
         seen = Int[]
         sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(500; jitter=1e-6), noise=1e-6, n_initial=3,
-                            fit=(X, y) -> (push!(seen, length(X)); GP(Matern52Kernel())))
+                            fit_hyperparams=(X, y) -> (push!(seen, length(X)); GP(Matern52Kernel())))
         ho = Hyperoptimizer(gp_dq_bowl, (x=Continuous(0.0, 1.0), y=Continuous(0.0, 1.0)); sampler=sampler, n=8)
         run!(ho; executor=DistributedQueue(3; spawn_worker=gp_dq_spawn_worker, setup_worker=gp_dq_setup_worker), show_progress=false)
         @test length(ho.completed) == 8
