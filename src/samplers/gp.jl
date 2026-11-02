@@ -10,19 +10,19 @@ Model the objective as a Gaussian process over the unit-encoded hyperparameters,
 - `fit(X, y)`: return the GP to condition on, e.g. one with refitted kernel hyperparameters; `y` is standardized to mean 0 and standard deviation 1. When `nothing`, `gp` is used as given.
 """
 struct GPSampler{T<:Random.AbstractRNG} <: Sampler
-    gp::Any
+    gp::AbstractGP
     next_point::Any
     noise::Float64
     n_initial::Int
     fit::Any
     rng::T
-    posterior::Base.RefValue{Any}
+    posterior::Base.RefValue{AbstractGP}
 end
 
-function GPSampler(gp; next_point, noise::Real, n_initial::Int, fit=nothing, rng::Random.AbstractRNG=StableRNG(1))
+function GPSampler(gp::AbstractGP; next_point, noise::Real, n_initial::Int, fit=nothing, rng::Random.AbstractRNG=StableRNG(1))
     noise >= 0 || throw(ArgumentError("noise must be a non-negative variance, got $noise"))
     n_initial >= 0 || throw(ArgumentError("n_initial must be >= 0, got $n_initial"))
-    return GPSampler(gp, next_point, Float64(noise), n_initial, fit, rng, Ref{Any}(gp))
+    return GPSampler(gp, next_point, Float64(noise), n_initial, fit, rng, Ref{AbstractGP}(gp))
 end
 
 function (s::GPSampler)(candidates, runs)
@@ -45,7 +45,7 @@ function on_tell!(s::GPSampler, runs, entry::RunEntry)
     return nothing
 end
 
-init(s::GPSampler, candidates, n) = GPSampler(s.gp, s.next_point, s.noise, s.n_initial, s.fit, s.rng, Ref{Any}(s.gp))
+init(s::GPSampler, candidates, n) = GPSampler(s.gp, s.next_point, s.noise, s.n_initial, s.fit, s.rng, Ref{AbstractGP}(s.gp))
 exhausted(::GPSampler, ho) = false  # COV_EXCL_LINE
 blocked(::GPSampler, ho) = false  # COV_EXCL_LINE
 create_run_entry(::GPSampler, ho, id, params, unit_params) = RunEntry(id, params, unit_params)

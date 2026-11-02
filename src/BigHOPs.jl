@@ -21,7 +21,7 @@ import ProgressMeter
 import DataFrames
 import QuasiMonteCarlo
 import Sobol
-using AbstractGPs: ColVecs, posterior, mean, std
+using AbstractGPs: AbstractGP, ColVecs, posterior, mean, std
 
 include("basic/domains.jl")
 include("basic/types.jl")

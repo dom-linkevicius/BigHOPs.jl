@@ -8,6 +8,7 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
 
     @test_throws ArgumentError GPSampler(GP(Matern52Kernel()); next_point=thompson, noise=-1, n_initial=5)
     @test_throws ArgumentError GPSampler(GP(Matern52Kernel()); next_point=thompson, noise=1e-6, n_initial=-1)
+    @test_throws MethodError GPSampler(GP(Matern52Kernel())(ColVecs(rand(2, 3)), 1e-6); next_point=thompson, noise=1e-6, n_initial=5)
     @test_throws ArgumentError ThompsonSampling(0; jitter=1e-6)
     @test_throws ArgumentError ThompsonSampling(500; jitter=-1)
 
