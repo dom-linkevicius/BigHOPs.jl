@@ -31,8 +31,8 @@ function (s::GPSampler)(candidates, runs)
 end
 
 init(s::GPSampler, candidates, n) = GPSampler(s.gp, s.next_point, s.noise, s.n_initial, s.fit, s.rng, Ref{Any}(s.gp))
-exhausted(::GPSampler, ho) = false
-blocked(::GPSampler, ho) = false
+exhausted(::GPSampler, ho) = false  # COV_EXCL_LINE
+blocked(::GPSampler, ho) = false  # COV_EXCL_LINE
 create_run_entry(::GPSampler, ho, id, params, unit_params) = RunEntry(id, params, unit_params)
 
 """
