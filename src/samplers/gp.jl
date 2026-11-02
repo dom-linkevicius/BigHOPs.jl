@@ -1,5 +1,5 @@
 """
-    GPSampler(gp; next_point, noise, n_initial, fit=nothing, standardize=true, rng=StableRNG(1))
+    GPSampler(gp; next_point, noise, n_initial, fit=nothing, standardize=BigHOPs.zscore, rng=StableRNG(1))
 
 Model the objective as a Gaussian process over the unit-encoded hyperparameters, conditioned on every `Completed` trial after each tell, and let `next_point` choose each new trial. `Nominal` hyperparameters enter the kernel through their ordered unit encoding.
 
@@ -8,7 +8,7 @@ Model the objective as a Gaussian process over the unit-encoded hyperparameters,
 - `noise`: the observation noise variance.
 - `n_initial`: how many trials are drawn uniformly at random before `next_point` is used.
 - `fit(X, y)`: return the GP to condition on, e.g. one with refitted kernel hyperparameters. When `nothing`, `gp` is used as given.
-- `standardize`: whether the observed values are shifted and scaled to mean 0 and standard deviation 1 before `fit` and conditioning.
+- `standardize(y)`: transform the observed values before `fit` and conditioning; the default shifts and scales them to mean 0 and standard deviation 1. When `nothing`, they are used as given.
 """
 struct GPSampler{T<:Random.AbstractRNG} <: Sampler
     gp::AbstractGP
@@ -16,12 +16,12 @@ struct GPSampler{T<:Random.AbstractRNG} <: Sampler
     noise::Float64
     n_initial::Int
     fit::Any
-    standardize::Bool
+    standardize::Any
     rng::T
     posterior::Base.RefValue{AbstractGP}
 end
 
-function GPSampler(gp::AbstractGP; next_point, noise::Real, n_initial::Int, fit=nothing, standardize::Bool=true, rng::Random.AbstractRNG=StableRNG(1))
+function GPSampler(gp::AbstractGP; next_point, noise::Real, n_initial::Int, fit=nothing, standardize=zscore, rng::Random.AbstractRNG=StableRNG(1))
     noise >= 0 || throw(ArgumentError("noise must be a non-negative variance, got $noise"))
     n_initial >= 0 || throw(ArgumentError("n_initial must be >= 0, got $n_initial"))
     return GPSampler(gp, next_point, Float64(noise), n_initial, fit, standardize, rng, Ref{AbstractGP}(gp))
@@ -32,7 +32,7 @@ function (s::GPSampler)(candidates, runs)
     return s.next_point(s.posterior[], length(candidates), s.rng)
 end
 
-function _standardize(y)
+function zscore(y)
     spread = std(y)
     return spread > 0 ? (y .- mean(y)) ./ spread : y .- mean(y)
 end
@@ -42,7 +42,7 @@ function on_tell!(s::GPSampler, runs, entry::RunEntry)
     done = filter(e -> e.status === Completed, runs)
     X = ColVecs(stack(e.unit_params for e in done))
     observed = Float64[e.value for e in done]
-    y = s.standardize ? _standardize(observed) : observed
+    y = s.standardize === nothing ? observed : s.standardize(observed)
     gp = s.fit === nothing ? s.gp : s.fit(X, y)
     s.posterior[] = posterior(gp(X, s.noise), y)
     return nothing
