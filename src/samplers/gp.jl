@@ -1,7 +1,7 @@
 """
     GPSampler(gp; next_point, noise, n_initial, fit=nothing, rng=StableRNG(1))
 
-Model the objective as a Gaussian process over the unit-encoded hyperparameters, conditioned on every `Completed` trial after each tell, and let `next_point` choose each new trial. Needs `AbstractGPs` loaded. `Nominal` hyperparameters enter the kernel through their ordered unit encoding.
+Model the objective as a Gaussian process over the unit-encoded hyperparameters, conditioned on every `Completed` trial after each tell, and let `next_point` choose each new trial. `Nominal` hyperparameters enter the kernel through their ordered unit encoding.
 
 - `gp`: an AbstractGPs prior, e.g. `GP(Matern52Kernel())`.
 - `next_point(posterior, d, rng)`: return the next trial as a point in `[0, 1]^d`, e.g. `ThompsonSampling`.
@@ -30,6 +30,21 @@ function (s::GPSampler)(candidates, runs)
     return s.next_point(s.posterior[], length(candidates), s.rng)
 end
 
+function _standardize(y)
+    spread = std(y)
+    return spread > 0 ? (y .- mean(y)) ./ spread : y .- mean(y)
+end
+
+function on_tell!(s::GPSampler, runs, entry::RunEntry)
+    entry.status === Completed || return nothing
+    done = filter(e -> e.status === Completed, runs)
+    X = ColVecs(stack(e.unit_params for e in done))
+    y = _standardize(Float64[e.value for e in done])
+    gp = s.fit === nothing ? s.gp : s.fit(X, y)
+    s.posterior[] = posterior(gp(X, s.noise), y)
+    return nothing
+end
+
 init(s::GPSampler, candidates, n) = GPSampler(s.gp, s.next_point, s.noise, s.n_initial, s.fit, s.rng, Ref{Any}(s.gp))
 exhausted(::GPSampler, ho) = false  # COV_EXCL_LINE
 blocked(::GPSampler, ho) = false  # COV_EXCL_LINE
@@ -52,3 +67,9 @@ struct ThompsonSampling
 end
 
 ThompsonSampling(n_candidates::Int; jitter::Real) = ThompsonSampling(n_candidates, Float64(jitter))
+
+function (ts::ThompsonSampling)(post, d::Int, rng)
+    candidates = rand(rng, d, ts.n_candidates)
+    draw = rand(rng, post(ColVecs(candidates), ts.jitter))
+    return candidates[:, argmin(draw)]
+end
