@@ -37,6 +37,21 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     @test_logs BigHOPs.ask!(ho_block)
     @test ho_block.sampler.posterior[] !== nothing
 
+    ho_strict = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=2, strict_initialization=true), n=5)
+    strict_trials = [BigHOPs.ask!(ho_strict) for _ in 1:2]
+    with_logger(NullLogger()) do
+        BigHOPs.tell!(ho_strict, strict_trials[1], ErrorException("simulated failure"))
+    end
+    @test BigHOPs.blocked(ho_strict.sampler, ho_strict)
+    BigHOPs.tell!(ho_strict, strict_trials[2], 1.0)
+    @test !BigHOPs.blocked(ho_strict.sampler, ho_strict)
+    @test_logs (:warn, r"only 1 of the 2 initial trials completed; strict_initialization") BigHOPs.ask!(ho_strict)
+    @test_logs BigHOPs.ask!(ho_strict)
+    @test ho_strict.sampler.posterior[] !== nothing
+    ho_strict_ok = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(strict_initialization=true), n=8)
+    @test_logs run!(ho_strict_ok; show_progress=false)
+    @test length(ho_strict_ok.completed) == 8
+
     ho_random = Hyperoptimizer(gp_bowl, candidates; sampler=RandomSampler(StableRNG(1)), n=30)
     run!(ho_random; show_progress=false)
     @test minimum(ho) < 1e-3

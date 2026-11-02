@@ -1,5 +1,5 @@
 """
-    GPSampler(gp; next_point, noise, n_initial, fit_hyperparams=nothing, standardize=BigHOPs.zscore, rng=StableRNG(1))
+    GPSampler(gp; next_point, noise, n_initial, fit_hyperparams=nothing, standardize=BigHOPs.zscore, strict_initialization=false, rng=StableRNG(1))
 
 Model the objective as a Gaussian process over the unit-encoded hyperparameters, conditioned on every `Completed` trial after each tell, and let `next_point` choose each new trial. `Nominal` hyperparameters enter the kernel through their ordered unit encoding.
 
@@ -9,6 +9,7 @@ Model the objective as a Gaussian process over the unit-encoded hyperparameters,
 - `n_initial`: how many trials drawn uniformly at random must complete before `next_point` is used. For each initial trial that does not complete, an extra random trial is drawn, with a warning; the unsuccessful one stays in the results. No further trial is proposed while the initial trials still running could complete the set.
 - `fit_hyperparams(X, y)`: return either the GP to condition on, e.g. one with refitted kernel hyperparameters, or a `(gp, noise)` pair to refit the noise variance too. When `nothing`, `gp` is used as given.
 - `standardize(y)`: transform the observed values before `fit_hyperparams` and conditioning; the default shifts and scales them to mean 0 and standard deviation 1. When `nothing`, they are used as given.
+- `strict_initialization`: when `true`, exactly `n_initial` random trials are drawn, with no extra ones for those that do not complete; once all of them have finished, `next_point` takes over from those that completed, with a warning if that is fewer than `n_initial`.
 
 `next_point`, `fit_hyperparams` and `standardize` are saved in checkpoints by name, so pass named functions or callable structs such as `ThompsonSampling`: an anonymous function is reloaded as whichever function carries its generated name in the new session.
 
@@ -55,23 +56,30 @@ struct GPSampler{T<:Random.AbstractRNG} <: Sampler
     n_initial::Int
     fit_hyperparams::Any
     standardize::Any
+    strict_initialization::Bool
     rng::T
     posterior::Base.RefValue{Union{Nothing,AbstractGP}}
 end
 
-function GPSampler(gp::AbstractGP; next_point, noise::Union{Nothing,Real}, n_initial::Int, fit_hyperparams=nothing, standardize=zscore, rng::Random.AbstractRNG=StableRNG(1))
+function GPSampler(gp::AbstractGP; next_point, noise::Union{Nothing,Real}, n_initial::Int, fit_hyperparams=nothing, standardize=zscore, strict_initialization::Bool=false, rng::Random.AbstractRNG=StableRNG(1))
     noise === nothing || noise >= 0 || throw(ArgumentError("noise must be a non-negative variance, got $noise"))
     noise === nothing && fit_hyperparams === nothing &&
         throw(ArgumentError("noise can only be nothing when fit_hyperparams returns a (gp, noise) pair"))
     n_initial >= 0 || throw(ArgumentError("n_initial must be >= 0, got $n_initial"))
-    return GPSampler(gp, next_point, Ref{Union{Nothing,Float64}}(noise), n_initial, fit_hyperparams, standardize, rng, Ref{Union{Nothing,AbstractGP}}(nothing))
+    return GPSampler(gp, next_point, Ref{Union{Nothing,Float64}}(noise), n_initial, fit_hyperparams, standardize, strict_initialization, rng, Ref{Union{Nothing,AbstractGP}}(nothing))
 end
 
 function (s::GPSampler)(candidates, runs)
+    length(runs) < s.n_initial && return rand(s.rng, length(candidates))
     completed = count(e -> e.status === Completed, runs)
-    completed >= s.n_initial && return s.next_point(something(s.posterior[], s.gp), length(candidates), s.rng)
-    length(runs) < s.n_initial || @warn "only $completed of the $(s.n_initial) initial trials have completed; drawing an extra random trial"
-    return rand(s.rng, length(candidates))
+    if s.strict_initialization
+        length(runs) == s.n_initial && completed < s.n_initial &&
+            @warn "only $completed of the $(s.n_initial) initial trials completed; strict_initialization is set, so next_point continues from those"
+    elseif completed < s.n_initial
+        @warn "only $completed of the $(s.n_initial) initial trials have completed; drawing an extra random trial"
+        return rand(s.rng, length(candidates))
+    end
+    return s.next_point(something(s.posterior[], s.gp), length(candidates), s.rng)
 end
 
 function zscore(y)
@@ -106,9 +114,12 @@ function on_tell!(s::GPSampler, runs, entry::RunEntry)
     return nothing
 end
 
-init(s::GPSampler, candidates, n) = GPSampler(s.gp, s.next_point, Ref{Union{Nothing,Float64}}(s.noise[]), s.n_initial, s.fit_hyperparams, s.standardize, s.rng, Ref{Union{Nothing,AbstractGP}}(nothing))
+init(s::GPSampler, candidates, n) = GPSampler(s.gp, s.next_point, Ref{Union{Nothing,Float64}}(s.noise[]), s.n_initial, s.fit_hyperparams, s.standardize, s.strict_initialization, s.rng, Ref{Union{Nothing,AbstractGP}}(nothing))
 exhausted(::GPSampler, ho) = false  # COV_EXCL_LINE
-blocked(s::GPSampler, ho) = length(ho.completed) < s.n_initial <= length(ho.completed) + ho.n_pending
+function blocked(s::GPSampler, ho)
+    s.strict_initialization && return length(ho.runs) >= s.n_initial && any(e -> e.status === Pending, view(ho.runs, 1:s.n_initial))
+    return length(ho.completed) < s.n_initial <= length(ho.completed) + ho.n_pending
+end
 create_run_entry(::GPSampler, ho, id, params, unit_params) = RunEntry(id, params, unit_params)
 
 """
