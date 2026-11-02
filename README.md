@@ -111,6 +111,10 @@ This qualitatively reproduces Figure 6 of the DEHB paper. `DEHB` pulls away from
 
 This package does not yet contain `BOHB`, so `Hyperband` was added as a stand-in, as until `BOHB` gets enough samples it acts like `Hyperband`. `Hyperband`, same as `BOHB` in Figure 6 of the DEHB paper, tracks `DEHB` early on, but contrary to `BOHB` it never separates from `RandomSampler` afterwards, because it has no equivalent of the Bayesian model that `BOHB` starts to exploit once it has enough observations. Cheap rungs alone buy little here — every configuration `Hyperband` promotes was still drawn using an inner `RandomSampler`, so it tracks random search. What separates `DEHB` is that its higher-resource subpopulations are evolved from configurations that already did well at lower resource, it uses a sampling method that is adaptive based on the performance of previous trials.
 
+The same comparison with 8 binary and 8 continuous hyperparameters (`d = 16`), where every sampler gets a cumulative budget / b_max of 10⁴:
+
+![Stochastic Counting Ones, 16 dimensions](docs/benchmarks/counting_ones_16d_regret.png)
+
 ### Neural network hyperparameter search
 
 The second benchmark trains a small MLP on the Titanic dataset (via `MLDatasets.jl`), minimizing validation loss over five hyperparameters: learning rate, number of dense layers, hidden width, activation, and L2 regularization strength.
