@@ -90,7 +90,8 @@ end
 exhausted(::GPSampler, ho) = false  # COV_EXCL_LINE
 function blocked(s::GPSampler, ho)
     s.strict_initialization && return length(ho.runs) >= s.n_initial && any(e -> e.status === Pending, view(ho.runs, 1:s.n_initial))
-    return length(ho.completed) < s.n_initial <= length(ho.completed) + ho.n_pending
+    completed = length(ho.completed)
+    return completed < s.n_initial && completed + ho.n_pending >= s.n_initial
 end
 create_run_entry(::GPSampler, ho, id, params, unit_params) = RunEntry(id, params, unit_params)
 
