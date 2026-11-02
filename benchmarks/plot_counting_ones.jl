@@ -1,6 +1,6 @@
 using CairoMakie
 using JLD2
-using Statistics: median, quantile
+using Statistics: mean, std
 
 const RESULTS_DIR = joinpath(@__DIR__, "counting_ones_results")
 const OUTDIR = joinpath(@__DIR__, "..", "docs", "benchmarks")
@@ -17,6 +17,19 @@ results_path(ncat, ncont, name) = joinpath(RESULTS_DIR, "counting_ones_$(ncat)ca
 
 best_measured_regret(trials, d) = (accumulate(min, trials.value) .+ d) ./ d
 
+function incumbent_true_regret(trials, d)
+    curve = Vector{Float64}(undef, length(trials.r))
+    incumbent_value, incumbent_r, incumbent_regret = Inf, 0, NaN
+    for i in eachindex(trials.r)
+        r = Int(trials.r[i])
+        if r >= incumbent_r && (r > incumbent_r || trials.value[i] < incumbent_value)
+            incumbent_value, incumbent_r, incumbent_regret = trials.value[i], r, trials.true_regret[i]
+        end
+        curve[i] = incumbent_regret
+    end
+    return curve
+end
+
 function on_grid(budget, curve)
     out, j = fill(NaN, length(GRID)), 0
     for (i, g) in enumerate(GRID)
@@ -30,7 +43,7 @@ function on_grid(budget, curve)
     return out
 end
 
-function load_curves(ncat, ncont, name; curve=best_measured_regret)
+function load_curves(ncat, ncont, name; curve=incumbent_true_regret)
     JLD2.jldopen(results_path(ncat, ncont, name), "r") do file
         repeat_keys = sort(filter(startswith("repeat_"), collect(keys(file))); by=k -> parse(Int, k[8:end]))
         rows = map(repeat_keys) do key
@@ -43,21 +56,25 @@ end
 
 columnwise(f, curves) = [any(isnan, c) || f(c) <= 0 ? NaN : f(c) for c in eachcol(curves)]
 
+standard_error(c) = std(c) / sqrt(length(c))
+
 function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims)
+    decades = ylims === nothing ? nothing : floor(Int, log10(ylims[1])):ceil(Int, log10(ylims[2]))
     fig = Figure(size=(750, 400))
     ax = Axis(fig[1, 1]; xlabel="cumulative budget / b_max", ylabel="normalized regret",
               xscale=log10, yscale=log10,
               xticks=Makie.LogTicks(-2:6),
               xminorticksvisible=true, xminorgridvisible=true,
               xminorticks=[d * 10.0^e for e in -2:5 for d in 2:9],
-              yminorticksvisible=true, yminorgridvisible=true, yminorticks=IntervalsBetween(9))
+              yticks=decades === nothing ? Makie.automatic : Makie.LogTicks(decades), yminorticksvisible=true, yminorgridvisible=true,
+              yminorticks=decades === nothing ? IntervalsBetween(9) : [m * 10.0^e for e in decades for m in 2:9])
     repeats = 0
     for name in samplers
         curves = load_curves(ncat, ncont, name)
         repeats = size(curves, 1)
         color = SAMPLER_COLORS[name]
-        lines!(ax, GRID, columnwise(median, curves); label=name, color=color)
-        band!(ax, GRID, columnwise(c -> quantile(c, 0.25), curves), columnwise(c -> quantile(c, 0.75), curves); color=(color, 0.15))
+        lines!(ax, GRID, columnwise(mean, curves); label=name, color=color)
+        band!(ax, GRID, columnwise(c -> mean(c) - standard_error(c), curves), columnwise(c -> mean(c) + standard_error(c), curves); color=(color, 0.15))
     end
     ax.title = "Stochastic Counting Ones, $ncat categorical + $ncont continuous ($repeats repeats)"
     xlims!(ax, xlims...)
