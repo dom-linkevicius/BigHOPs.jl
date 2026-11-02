@@ -37,7 +37,7 @@ function fit_kernel(X, y)
     return GP(kernel(exp.(v[1:d]), exp(v[d+1])))
 end
 
-sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(1000; jitter=1e-6), noise=noise, n_initial=10,
+sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(10; jitter=1e-6), noise=noise, n_initial=10,
                     fit_hyperparams=fit_kernel)
 ```
 
@@ -60,7 +60,7 @@ function fit_kernel_and_noise(X, y)
     return GP(kernel(exp.(v[1:d]), exp(v[d+1]))), exp(v[d+2])
 end
 
-sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(1000; jitter=1e-6), noise=nothing, n_initial=10,
+sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(10; jitter=1e-6), noise=nothing, n_initial=10,
                     fit_hyperparams=fit_kernel_and_noise)
 ```
 """
@@ -138,25 +138,26 @@ end
 create_run_entry(::GPSampler, ho, id, params, unit_params) = RunEntry(id, params, unit_params)
 
 """
-    ThompsonSampling(n_candidates; jitter)
+    ThompsonSampling(log2_candidates; jitter)
 
-A `next_point` for `GPSampler`: draw the GP posterior jointly at `n_candidates` uniformly random points and return the one where the draw is lowest (Kandasamy et al., 2018, https://proceedings.mlr.press/v84/kandasamy18a.html). `jitter` is the variance added to the draw's covariance so that it can be factorized.
+A `next_point` for `GPSampler`: draw the GP posterior jointly at `2^log2_candidates` candidate points and return the one where the draw is lowest (Kandasamy et al., 2018, https://proceedings.mlr.press/v84/kandasamy18a.html). The candidates are a Sobol sequence scrambled afresh from `rng` on every call; the scrambling (Owen's) needs a power-of-2 number of points, hence the exponent, e.g. `10` for 1024 candidates. `jitter` is the variance added to the draw's covariance so that it can be factorized.
 """
 struct ThompsonSampling
-    n_candidates::Int
+    log2_candidates::Int
     jitter::Float64
 
-    function ThompsonSampling(n_candidates::Int, jitter::Float64)
-        n_candidates >= 1 || throw(ArgumentError("n_candidates must be >= 1, got $n_candidates"))
+    function ThompsonSampling(log2_candidates::Int, jitter::Float64)
+        log2_candidates >= 1 || throw(ArgumentError("log2_candidates must be >= 1, got $log2_candidates"))
         jitter >= 0 || throw(ArgumentError("jitter must be a non-negative variance, got $jitter"))
-        return new(n_candidates, jitter)
+        return new(log2_candidates, jitter)
     end
 end
 
-ThompsonSampling(n_candidates::Int; jitter::Real) = ThompsonSampling(n_candidates, Float64(jitter))
+ThompsonSampling(log2_candidates::Int; jitter::Real) = ThompsonSampling(log2_candidates, Float64(jitter))
 
 function (ts::ThompsonSampling)(post, d::Int, rng)
-    candidates = rand(rng, d, ts.n_candidates)
+    scrambled_sobol = QuasiMonteCarlo.SobolSample(R=QuasiMonteCarlo.OwenScramble(base=2, rng=rng))
+    candidates = QuasiMonteCarlo.sample(2^ts.log2_candidates, d, scrambled_sobol)
     draw = rand(rng, post(ColVecs(candidates), ts.jitter))
     return candidates[:, argmin(draw)]
 end

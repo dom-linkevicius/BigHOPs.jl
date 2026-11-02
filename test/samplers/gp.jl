@@ -3,14 +3,14 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
 @testset "GPSampler" begin
     @info "Testing GPSampler"
     candidates = (x=Continuous(0.0, 1.0), y=Continuous(0.0, 1.0))
-    thompson = ThompsonSampling(500; jitter=1e-6)
+    thompson = ThompsonSampling(9; jitter=1e-6)
     gp_sampler(; kwargs...) = GPSampler(GP(Matern52Kernel()); next_point=thompson, noise=1e-6, n_initial=5, kwargs...)
 
     @test_throws ArgumentError GPSampler(GP(Matern52Kernel()); next_point=thompson, noise=-1, n_initial=5)
     @test_throws ArgumentError GPSampler(GP(Matern52Kernel()); next_point=thompson, noise=1e-6, n_initial=-1)
     @test_throws MethodError GPSampler(GP(Matern52Kernel())(ColVecs(rand(2, 3)), 1e-6); next_point=thompson, noise=1e-6, n_initial=5)
     @test_throws ArgumentError ThompsonSampling(0; jitter=1e-6)
-    @test_throws ArgumentError ThompsonSampling(500; jitter=-1)
+    @test_throws ArgumentError ThompsonSampling(9; jitter=-1)
 
     ho = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(rng=StableRNG(1)), n=30)
     run!(ho; show_progress=false)
@@ -109,7 +109,7 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
 
     smooth = posterior(GP(SqExponentialKernel())(ColVecs(rand(StableRNG(2), 1, 20)), 1e-4), randn(StableRNG(3), 20))
     @test_throws Exception rand(StableRNG(4), smooth(ColVecs(rand(StableRNG(5), 1, 1000))))
-    point = ThompsonSampling(1000; jitter=1e-6)(smooth, 1, StableRNG(4))
+    point = ThompsonSampling(10; jitter=1e-6)(smooth, 1, StableRNG(4))
     @test length(point) == 1 && 0 <= point[1] <= 1
 
     mktempdir() do dir
@@ -127,7 +127,7 @@ end
 @testset "GPSampler under the Threaded executor" begin
     @info "Testing GPSampler under the Threaded executor"
     seen = Int[]
-    sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(500; jitter=1e-6), noise=1e-6, n_initial=5,
+    sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(9; jitter=1e-6), noise=1e-6, n_initial=5,
                         fit_hyperparams=(X, y) -> (push!(seen, length(X)); GP(Matern52Kernel())))
     ho = Hyperoptimizer(gp_bowl, (x=Continuous(0.0, 1.0), y=Continuous(0.0, 1.0)); sampler=sampler, n=30)
     run!(ho; executor=Threaded(8), show_progress=false)
@@ -168,7 +168,7 @@ end
 
     try
         seen = Int[]
-        sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(500; jitter=1e-6), noise=1e-6, n_initial=3,
+        sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(9; jitter=1e-6), noise=1e-6, n_initial=3,
                             fit_hyperparams=(X, y) -> (push!(seen, length(X)); GP(Matern52Kernel())))
         ho = Hyperoptimizer(gp_dq_bowl, (x=Continuous(0.0, 1.0), y=Continuous(0.0, 1.0)); sampler=sampler, n=8)
         run!(ho; executor=DistributedQueue(3; spawn_worker=gp_dq_spawn_worker, setup_worker=gp_dq_setup_worker), show_progress=false)
