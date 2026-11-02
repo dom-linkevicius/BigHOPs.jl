@@ -1,15 +1,15 @@
 """
-    GPSampler(gp; next_point, noise, n_initial, fit_hyperparams=nothing, standardize=BigHOPs.zscore, strict_initialization=false, rng=StableRNG(1))
+    GPSampler(gp; next_point, noise, n_initial, fit_hyperparams=nothing, standardize=BigHOPs.zscore, strict_initialization=true, rng=StableRNG(1))
 
 Model the objective as a Gaussian process over the unit-encoded hyperparameters, conditioned on every `Completed` trial after each tell, and let `next_point` choose each new trial. `Nominal` hyperparameters enter the kernel through their ordered unit encoding.
 
 - `gp`: an AbstractGPs prior, e.g. `GP(Matern52Kernel())`.
 - `next_point(posterior, d, rng)`: return the next trial as a point in `[0, 1]^d`, e.g. `ThompsonSampling`.
 - `noise`: the observation noise variance, or `nothing` when `fit_hyperparams` returns one. A noise returned by `fit_hyperparams` replaces it, with a warning the first time if it was a number; the one in use is `ho.sampler.noise[]`.
-- `n_initial`: how many trials drawn uniformly at random must complete before `next_point` is used. For each initial trial that does not complete, an extra random trial is drawn, with a warning; the unsuccessful one stays in the results. No further trial is proposed while the initial trials still running could complete the set.
+- `n_initial`: how many trials are drawn uniformly at random before `next_point` is used. No further trial is proposed until all of them have finished; `next_point` then takes over from those that completed, with a warning if that is fewer than `n_initial`.
 - `fit_hyperparams(X, y)`: return either the GP to condition on, e.g. one with refitted kernel hyperparameters, or a `(gp, noise)` pair to refit the noise variance too. When `nothing`, `gp` is used as given.
 - `standardize(y)`: transform the observed values before `fit_hyperparams` and conditioning; the default shifts and scales them to mean 0 and standard deviation 1. When `nothing`, they are used as given.
-- `strict_initialization`: when `true`, exactly `n_initial` random trials are drawn, with no extra ones for those that do not complete; once all of them have finished, `next_point` takes over from those that completed, with a warning if that is fewer than `n_initial`.
+- `strict_initialization`: when `false`, each initial trial that does not complete gets an extra random trial instead, with a warning, until `n_initial` have completed; the unsuccessful ones stay in the results, and new proposals wait only while the initial trials still running could complete the set.
 
 `next_point`, `fit_hyperparams` and `standardize` are saved in checkpoints by name, so pass named functions or callable structs such as `ThompsonSampling`: an anonymous function is reloaded as whichever function carries its generated name in the new session.
 
@@ -61,7 +61,7 @@ struct GPSampler{T<:Random.AbstractRNG} <: Sampler
     posterior::Base.RefValue{Union{Nothing,AbstractGP}}
 end
 
-function GPSampler(gp::AbstractGP; next_point, noise::Union{Nothing,Real}, n_initial::Int, fit_hyperparams=nothing, standardize=zscore, strict_initialization::Bool=false, rng::Random.AbstractRNG=StableRNG(1))
+function GPSampler(gp::AbstractGP; next_point, noise::Union{Nothing,Real}, n_initial::Int, fit_hyperparams=nothing, standardize=zscore, strict_initialization::Bool=true, rng::Random.AbstractRNG=StableRNG(1))
     noise === nothing || noise >= 0 || throw(ArgumentError("noise must be a non-negative variance, got $noise"))
     noise === nothing && fit_hyperparams === nothing &&
         throw(ArgumentError("noise can only be nothing when fit_hyperparams returns a (gp, noise) pair"))

@@ -19,7 +19,7 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     @test !BigHOPs.exhausted(ho.sampler, ho)
     @test !BigHOPs.blocked(ho.sampler, ho)
 
-    ho_block = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=2), n=5)
+    ho_block = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=2, strict_initialization=false), n=5)
     first_trial = BigHOPs.ask!(ho_block)
     @test !BigHOPs.blocked(ho_block.sampler, ho_block)
     second_trial = BigHOPs.ask!(ho_block)
