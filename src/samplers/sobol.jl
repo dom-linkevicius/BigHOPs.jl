@@ -16,6 +16,8 @@ init(s::SobolSampler, candidates, n) =
     SobolSampler(s.rng, Sobol.SobolSeq(length(candidates)), rand(s.rng, length(candidates)), Ref(false))
 
 function (s::SobolSampler)(candidates, runs)
+    # Sobol.jl skips the origin; starting there keeps power-of-2 prefixes balanced (Owen, arXiv:2008.08051;
+    # https://github.com/JuliaMath/Sobol.jl/issues/31, https://github.com/JuliaMath/Sobol.jl/pull/35)
     point = s.started[] ? Sobol.next!(s.sequence) : zeros(length(candidates))
     s.started[] = true
     return mod.(point .+ s.shift, 1.0)
