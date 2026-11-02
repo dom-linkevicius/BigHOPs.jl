@@ -140,7 +140,7 @@ create_run_entry(::GPSampler, ho, id, params, unit_params) = RunEntry(id, params
 """
     ThompsonSampling(log2_candidates; jitter)
 
-A `next_point` for `GPSampler`: draw the GP posterior jointly at `2^log2_candidates` candidate points and return the one where the draw is lowest (Kandasamy et al., 2018, https://proceedings.mlr.press/v84/kandasamy18a.html). The candidates are a Sobol sequence scrambled afresh from `rng` on every call; the scrambling (Owen's) needs a power-of-2 number of points, hence the exponent, e.g. `10` for 1024 candidates. `jitter` is the variance added to the draw's covariance so that it can be factorized.
+A `next_point` for `GPSampler`: draw the GP posterior jointly at `2^log2_candidates` candidate points and return the one where the draw is lowest (Kandasamy et al., 2018, https://proceedings.mlr.press/v84/kandasamy18a.html). The candidates are Sobol points moved by one random offset, drawn afresh from `rng` on every call, and wrapped around at 1; Sobol points cover each hyperparameter exactly evenly only in power-of-2 numbers, hence the exponent, e.g. `10` for 1024 candidates. `jitter` is the variance added to the draw's covariance so that it can be factorized.
 """
 struct ThompsonSampling
     log2_candidates::Int
@@ -156,8 +156,8 @@ end
 ThompsonSampling(log2_candidates::Int; jitter::Real) = ThompsonSampling(log2_candidates, Float64(jitter))
 
 function (ts::ThompsonSampling)(post, d::Int, rng)
-    scrambled_sobol = QuasiMonteCarlo.SobolSample(R=QuasiMonteCarlo.OwenScramble(base=2, rng=rng))
-    candidates = QuasiMonteCarlo.sample(2^ts.log2_candidates, d, scrambled_sobol)
+    shifted_sobol = QuasiMonteCarlo.SobolSample(R=QuasiMonteCarlo.Shift(rng=rng))
+    candidates = QuasiMonteCarlo.sample(2^ts.log2_candidates, d, shifted_sobol)
     draw = rand(rng, post(ColVecs(candidates), ts.jitter))
     return candidates[:, argmin(draw)]
 end
