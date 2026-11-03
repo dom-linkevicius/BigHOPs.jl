@@ -101,19 +101,21 @@ This toy benchmark comes from [Falkner et al. (2018)](https://arxiv.org/abs/1807
 
 $$f(x) = -\left(\sum_{x \in X_{cat}} x + \sum_{x \in X_{cont}} \mathbb{E}_b[B_{p=x}]\right)$$
 
-over 32 binary and 32 continuous hyperparameters, where the resource `b` is the number of Bernoulli samples used to estimate each continuous variable's mean, so a low-resource evaluation is a noisy one. The schedule is `r_min=9`, `R=729`, `η=3`, which should match the paper, and regret is normalized as `(f(x) + d) / d` with `d = 64`, so 0 is the optimum and 1 the worst case.
+over binary and continuous hyperparameters, where the resource `b` is the number of Bernoulli samples used to estimate each continuous variable's mean, so a low-resource evaluation is a noisy one. The schedule is `r_min=9`, `R=729`, `η=3`, which should match the paper, and regret is normalized as `(f(x) + d) / d` with `d` the total number of hyperparameters, so 0 is the optimum and 1 the worst case.
 
-Each sampler is run 50 times. The cumulative budget / b_max varies by sampler — `RandomSampler` gets 10⁶, `Hyperband` and `DEHB` get 10⁴.
+Each sampler is run 50 times.
+
+With 8 binary and 8 continuous hyperparameters (`d = 16`), every sampler gets a cumulative budget / b_max of 10⁴:
+
+![Stochastic Counting Ones, 16 dimensions](docs/benchmarks/counting_ones_16d_regret.png)
+
+With 32 binary and 32 continuous hyperparameters (`d = 64`), the cumulative budget / b_max varies by sampler — `RandomSampler` gets 10⁶, `Hyperband` and `DEHB` get 10⁴:
 
 ![Stochastic Counting Ones](docs/benchmarks/counting_ones_64d_regret.png)
 
 This qualitatively reproduces Figure 6 of the DEHB paper. `DEHB` pulls away from the other two at around 10² and has dropped by more than an order of magnitude by 10⁴, while `RandomSampler` has barely improved even two decades of budget later, at 10⁶.
 
 This package does not yet contain `BOHB`, so `Hyperband` was added as a stand-in, as until `BOHB` gets enough samples it acts like `Hyperband`. `Hyperband`, same as `BOHB` in Figure 6 of the DEHB paper, tracks `DEHB` early on, but contrary to `BOHB` it never separates from `RandomSampler` afterwards, because it has no equivalent of the Bayesian model that `BOHB` starts to exploit once it has enough observations. Cheap rungs alone buy little here — every configuration `Hyperband` promotes was still drawn using an inner `RandomSampler`, so it tracks random search. What separates `DEHB` is that its higher-resource subpopulations are evolved from configurations that already did well at lower resource, it uses a sampling method that is adaptive based on the performance of previous trials.
-
-The same comparison with 8 binary and 8 continuous hyperparameters (`d = 16`), where every sampler gets a cumulative budget / b_max of 10⁴:
-
-![Stochastic Counting Ones, 16 dimensions](docs/benchmarks/counting_ones_16d_regret.png)
 
 ### Neural network hyperparameter search
 
