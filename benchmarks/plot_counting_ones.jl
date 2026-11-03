@@ -4,11 +4,11 @@ using Statistics: mean, std
 
 const RESULTS_DIR = joinpath(@__DIR__, "counting_ones_results")
 const OUTDIR = joinpath(@__DIR__, "..", "docs", "benchmarks")
-const SAMPLER_COLORS = Dict("Random" => Makie.wong_colors()[1], "Hyperband" => Makie.wong_colors()[3], "DEHB" => Makie.wong_colors()[2])
+const SAMPLER_COLORS = Dict("Random" => Makie.wong_colors()[1], "Hyperband" => Makie.wong_colors()[3], "DEHB" => Makie.wong_colors()[2], "GP" => Makie.wong_colors()[4])
 
 const PLOTS = (
     (ncat=32, ncont=32, samplers=("Random", "Hyperband", "DEHB"), xlims=(0.015, 1e6), ylims=(0.015, 0.5)),
-    (ncat=8, ncont=8, samplers=("Random", "Hyperband", "DEHB"), xlims=(1e-1, 1e4), ylims=(1e-3, 1e0)),
+    (ncat=8, ncont=8, samplers=("Random", "Hyperband", "DEHB", "GP"), xlims=(1e-1, 1e4), ylims=(1e-3, 1e0)),
 )
 
 const GRID = exp10.(range(-2, 6; length=160))
