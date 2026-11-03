@@ -1,6 +1,6 @@
 include("counting_ones.jl")
 
-const REPEATS = parse(Int, get(ENV, "BIGHO_COUNTING_ONES_REPEATS", "5"))
+const REPEATS = parse(Int, get(ENV, "BIGHO_COUNTING_ONES_REPEATS", "50"))
 
 const RUNS = (
     (ncat=32, ncont=32, samplers=(Random=1e6, Hyperband=1e4, DEHB=1e4)),
