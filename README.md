@@ -97,7 +97,7 @@ To check that the samplers and executors actually deliver what they promise, the
 
 ### Stochastic Counting Ones
 
-This toy benchmark comes from [Falkner et al. (2018)](https://arxiv.org/abs/1807.01774) and is used in §5.1 of the [DEHB paper](https://arxiv.org/abs/2105.09821). The objective is
+This toy benchmark comes from [Falkner et al. (2018)](https://arxiv.org/abs/1807.01774) (the paper where BOHB was introduced) and is used in §5.1 of [Awad et al. (2021)](https://arxiv.org/abs/2105.09821) (the paper where DEHB was introduced). The objective is
 
 $$f(x) = -\left(\sum_{x \in X_{cat}} x + \sum_{x \in X_{cont}} \mathbb{E}_b[B_{p=x}]\right)$$
 
