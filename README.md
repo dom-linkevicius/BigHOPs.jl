@@ -113,7 +113,7 @@ With 32 binary and 32 continuous hyperparameters (`d = 64`), the cumulative budg
 
 ![Stochastic Counting Ones](docs/benchmarks/counting_ones_64d_regret.png)
 
-This qualitatively reproduces Figure 6 of the DEHB paper. `DEHB` pulls away from the other two at around 10² and has dropped by more than an order of magnitude by 10⁴, while `RandomSampler` has barely improved even two decades of budget later, at 10⁶.
+These figures qualitatively reproduce Figure 3 from Falkner et al. (2018) and Figure 6 from Awad et al. (2021) respectively. `DEHB` pulls away from the other two at around 10² and has dropped by more than an order of magnitude by 10⁴, while `RandomSampler` has barely improved even two decades of budget later, at 10⁶.
 
 This package does not yet contain `BOHB`, so `Hyperband` was added as a stand-in, as until `BOHB` gets enough samples it acts like `Hyperband`. `Hyperband`, same as `BOHB` in Figure 6 of the DEHB paper, tracks `DEHB` early on, but contrary to `BOHB` it never separates from `RandomSampler` afterwards, because it has no equivalent of the Bayesian model that `BOHB` starts to exploit once it has enough observations. Cheap rungs alone buy little here — every configuration `Hyperband` promotes was still drawn using an inner `RandomSampler`, so it tracks random search. What separates `DEHB` is that its higher-resource subpopulations are evolved from configurations that already did well at lower resource, it uses a sampling method that is adaptive based on the performance of previous trials.
 
