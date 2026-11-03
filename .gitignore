@@ -3,3 +3,4 @@
 *.jl.mem
 Manifest.toml
 *.log
+benchmarks/counting_ones_results/

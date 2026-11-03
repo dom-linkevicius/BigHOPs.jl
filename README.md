@@ -31,6 +31,7 @@ The package currently implements the following samplers:
 - `Hyperband`, which runs brackets of trials, using a different number of resources to train them and promoting best trials within a bracket, until the bracket reaches its resource limit
 - `ASHA`, which is the asynchronous version of Hyperband, also running brackets, but not requiring the completion of a bracket before trials are promoted
 - `DEHB`, a modified version of `Hyperband` where, after the first bracket, trials are not simply promoted between rungs but undergo differential evolution and can reach a better ceiling on larger search spaces
+- `GPSampler`, which models the objective as a Gaussian process, updated after every completed trial, and chooses each new trial from that model, for example by Thompson sampling (`ThompsonSampling`)
 
 ## Convenience functionality
 
@@ -96,19 +97,27 @@ To check that the samplers and executors actually deliver what they promise, the
 
 ### Stochastic Counting Ones
 
-This toy benchmark comes from [Falkner et al. (2018)](https://arxiv.org/abs/1807.01774) and is used in §5.1 of the [DEHB paper](https://arxiv.org/abs/2105.09821). The objective is
+This toy benchmark comes from [Falkner et al. (2018)](https://arxiv.org/abs/1807.01774) (the paper where BOHB was introduced) and is used in §5.1 of [Awad et al. (2021)](https://arxiv.org/abs/2105.09821) (the paper where DEHB was introduced). The objective is
 
 $$f(x) = -\left(\sum_{x \in X_{cat}} x + \sum_{x \in X_{cont}} \mathbb{E}_b[B_{p=x}]\right)$$
 
-over 32 binary and 32 continuous hyperparameters, where the resource `b` is the number of Bernoulli samples used to estimate each continuous variable's mean, so a low-resource evaluation is a noisy one. The schedule is `r_min=9`, `R=729`, `η=3`, which should match the paper, and regret is normalized as `(f(x) + d) / d` with `d = 64`, so 0 is the optimum and 1 the worst case.
+over binary and continuous hyperparameters, where the resource `b` is the number of Bernoulli samples used to estimate each continuous variable's mean, so a low-resource evaluation is a noisy one. The schedule is `r_min=9`, `R=729`, `η=3`, which should match the paper, and regret is normalized as `(f(x) + d) / d` with `d` the total number of hyperparameters, so 0 is the optimum and 1 the worst case.
 
-Each sampler is run 50 times. The cumulative budget / b_max varies by sampler — `RandomSampler` gets 10⁶, `Hyperband` and `DEHB` get 10⁴.
+Each sampler is run 50 times.
 
-![Stochastic Counting Ones](docs/benchmarks/counting_ones_regret.png)
+With 8 binary and 8 continuous hyperparameters (`d = 16`), every sampler gets a cumulative budget / b_max of 10⁴:
 
-This qualitatively reproduces Figure 6 of the DEHB paper. `DEHB` pulls away from the other two at around 10² and has dropped by more than an order of magnitude by 10⁴, while `RandomSampler` has barely improved even two decades of budget later, at 10⁶.
+![Stochastic Counting Ones, 16 dimensions](docs/benchmarks/counting_ones_16d_regret.png)
 
-This package does not yet contain `BOHB`, so `Hyperband` was added as a stand-in, as until `BOHB` gets enough samples it acts like `Hyperband`. `Hyperband`, same as `BOHB` in Figure 6 of the DEHB paper, tracks `DEHB` early on, but contrary to `BOHB` it never separates from `RandomSampler` afterwards, because it has no equivalent of the Bayesian model that `BOHB` starts to exploit once it has enough observations. Cheap rungs alone buy little here — every configuration `Hyperband` promotes was still drawn using an inner `RandomSampler`, so it tracks random search. What separates `DEHB` is that its higher-resource subpopulations are evolved from configurations that already did well at lower resource, it uses a sampling method that is adaptive based on the performance of previous trials.
+With 32 binary and 32 continuous hyperparameters (`d = 64`), the cumulative budget / b_max varies by sampler — `RandomSampler` gets 10⁶, `Hyperband` and `DEHB` get 10⁴:
+
+![Stochastic Counting Ones](docs/benchmarks/counting_ones_64d_regret.png)
+
+These figures qualitatively reproduce Figure 3 from Falkner et al. (2018) and Figure 6 from Awad et al. (2021) respectively. They test two different cases, one with a smaller number of hyperparameters and one with a larger, showcasing the behaviour of the samplers in different settings.
+
+<!-- `DEHB` pulls away from the other two at around 10² and has dropped by more than an order of magnitude by 10⁴, while `RandomSampler` has barely improved even two decades of budget later, at 10⁶.
+
+This package does not yet contain `BOHB`, so `Hyperband` was added as a stand-in, as until `BOHB` gets enough samples it acts like `Hyperband`. `Hyperband`, same as `BOHB` in Figure 6 of the DEHB paper, tracks `DEHB` early on, but contrary to `BOHB` it never separates from `RandomSampler` afterwards, because it has no equivalent of the Bayesian model that `BOHB` starts to exploit once it has enough observations. Cheap rungs alone buy little here — every configuration `Hyperband` promotes was still drawn using an inner `RandomSampler`, so it tracks random search. What separates `DEHB` is that its higher-resource subpopulations are evolved from configurations that already did well at lower resource, it uses a sampling method that is adaptive based on the performance of previous trials. -->
 
 ### Neural network hyperparameter search
 
