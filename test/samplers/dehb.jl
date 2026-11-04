@@ -32,21 +32,19 @@ end
     @test ho.sampler.inner isa BigHOPs.DEHBSampler
 end
 
-@testset "DEHB subpopulations are keyed by resource and seeded at random" begin
-    @info "Testing that DEHB fills one subpopulation per resource level with unevaluated random members, sized by the largest rung at that level"
+@testset "DEHB subpopulations are keyed by resource and start empty" begin
+    @info "Testing that DEHB allocates one empty subpopulation per resource level, sized by the largest rung at that level"
 
     s = DEHB(R=27, η=3, r_min=1)
-    de = BigHOPs._subpopulations!(s, 2)
+    de = BigHOPs._subpopulations!(s)
 
     @test sort(collect(keys(de.subpops))) == [1, 3, 9, 27]
     @test sort(collect(keys(de.total_dispatched))) == [1, 3, 9, 27]
     @test [length(de.subpops[r]) for r in (1, 3, 9, 27)] == [27, 12, 6, 4]
-    @test all(members -> all(m -> length(m) == 2 && all(0 .<= m .<= 1), members), values(de.subpops))
-    @test all(f -> all(isinf, f), values(de.fitness))
-    @test all(ids -> all(==(0), ids), values(de.ids))
+    @test all(slots -> all(==(0), slots), values(de.subpops))
     @test all(==(0), values(de.total_dispatched))
 
-    @test BigHOPs._subpopulations!(s, 2) === de
+    @test BigHOPs._subpopulations!(s) === de
     @test length(de.subpops) == 4
 end
 
@@ -54,7 +52,7 @@ end
     @info "Testing that DEHB's target pointer walks a subpopulation and resets at its end"
 
     s = DEHB(R=27, η=3, r_min=1)
-    de = BigHOPs._subpopulations!(s, 2)
+    de = BigHOPs._subpopulations!(s)
 
     @test BigHOPs._next_slot(s, 3) == 1
     de.total_dispatched[3] = 11
@@ -66,47 +64,61 @@ end
 end
 
 @testset "DEHB mutation parents are the best members of a subpopulation" begin
-    @info "Testing that DEHB's mutation pool ranks a subpopulation by fitness, unevaluated members last, and still evolves from a pool smaller than three"
+    @info "Testing that DEHB's mutation pool ranks a subpopulation's occupants by value, pads it with random members up to the rung size, and still evolves from a pool smaller than three"
 
+    completed(id, u, v) = BigHOPs._with_result(BigHOPs.RunEntry(id, (r=1, a=0.0), u, Dict{Symbol,Any}()), BigHOPs.Completed, v, nothing)
+    runs = [completed(1, [0.1, 0.1], 3.0), completed(2, [0.2, 0.2], 1.0), completed(3, [0.3, 0.3], 2.0)]
     s = DEHB(R=27, η=3, r_min=1)
-    de = BigHOPs._subpopulations!(s, 2)
-    de.fitness[1][[5, 2, 9]] = [3.0, 1.0, 2.0]
+    de = BigHOPs._subpopulations!(s)
+    de.subpops[1][[5, 2, 9]] = [1, 2, 3]
 
-    @test BigHOPs._mutation_pool(de, 1, 2) == de.subpops[1][[2, 9]]
-    @test BigHOPs._mutation_pool(de, 1, 4) == de.subpops[1][[2, 9, 5, 1]]
-    @test length(BigHOPs._mutation_pool(de, 27, 1)) == 1
+    @test BigHOPs._mutation_pool(s, runs, 1, 2, 2) == [[0.2, 0.2], [0.3, 0.3]]
+    padded = BigHOPs._mutation_pool(s, runs, 1, 4, 2)
+    @test padded[1:3] == [[0.2, 0.2], [0.3, 0.3], [0.1, 0.1]]
+    @test length(padded) == 4 && all(0 .<= padded[4] .<= 1)
+    @test length(BigHOPs._mutation_pool(s, runs, 27, 1, 2)) == 1
 
     for _ in 1:20
-        trial = BigHOPs._evolve(s, 2, 27, 27, 1)
+        trial = BigHOPs._evolve(s, runs, 2, 27, 27, 1)
         @test length(trial) == 2
         @test all(0 .<= trial .<= 1)
     end
 end
 
 @testset "DEHB promotes the best unpromoted configurations from the level below" begin
-    @info "Testing DEHB's promotion queue: ranked by fitness, skipping configurations already at the higher level, peeked until dispatched"
+    @info "Testing DEHB's promotion queue: ranked by value, skipping configurations already at the higher level, peeked until dispatched"
 
+    completed(id, r, u, v) = BigHOPs._with_result(BigHOPs.RunEntry(id, (r=r, a=0.0), u, Dict{Symbol,Any}()), BigHOPs.Completed, v, nothing)
+    runs = [completed(i, 1, [0.1i], v) for (i, v) in enumerate([3.0, 1.0, 2.0, 4.0])]
+    append!(runs, [completed(4 + i, 3, [0.1i], 0.5) for i in 1:4])
     s = DEHB(R=9, η=3, r_min=1)
-    de = BigHOPs._subpopulations!(s, 1)
-    de.fitness[1][1:4] = [3.0, 1.0, 2.0, 4.0]
-    de.ids[1][1:4] = [11, 12, 13, 14]
-    de.subpops[3][1] = copy(de.subpops[1][2])
+    de = BigHOPs._subpopulations!(s)
+    de.subpops[1][1:4] = 1:4
+    de.subpops[3][1] = 6
 
     bracket = BigHOPs._make_bracket(s, 1, 1)
     decision = BigHOPs._promote(bracket, bracket.rungs[1], 0)
 
-    @test BigHOPs._promotion_candidate!(s, 1, decision) == 13
-    @test de.promotion_queues[3] == [13, 11, 14]
-    @test BigHOPs._promotion_candidate!(s, 1, decision) == 13
+    @test BigHOPs._promotion_candidate!(s, runs, decision) == 3
+    @test de.promotion_queues[3] == [3, 1, 4]
+    @test BigHOPs._promotion_candidate!(s, runs, decision) == 3
     popfirst!(de.promotion_queues[3])
-    @test BigHOPs._promotion_candidate!(s, 1, decision) == 11
+    @test BigHOPs._promotion_candidate!(s, runs, decision) == 1
 
     empty!(de.promotion_queues[3])
-    for i in 1:4
-        de.subpops[3][i] = copy(de.subpops[1][i])
-    end
-    @test BigHOPs._promotion_candidate!(s, 1, decision) == 12
+    de.subpops[3][1:4] = 5:8
+    @test BigHOPs._promotion_candidate!(s, runs, decision) == 2
     @test isempty(de.promotion_queues[3])
+end
+
+@testset "DEHB draws the first rung of the first bracket uniformly at random" begin
+    @info "Testing that bracket 1 of iteration 1 evaluates plain uniform draws from DEHB's rng at its first rung, as in the paper"
+
+    ho = Hyperoptimizer(p -> p.a + p.b, (a=Continuous(0, 1), b=Continuous(0, 1)), DEHB(R=9, η=3, r_min=1, rng=StableRNG(5)))
+    run!(ho; show_progress=false)
+    rng = StableRNG(5)
+    first_rung = filter(e -> e.metadata[:iteration] == 1 && e.metadata[:bracket] == 1 && e.metadata[:rung] == 1, ho.runs)
+    @test [e.unit_params for e in first_rung] == [rand(rng, 2) for _ in 1:9]
 end
 
 @testset "DEHB trial generation mixes mutant and target" begin
@@ -177,7 +189,7 @@ end
     de = ho.sampler.inner
     for r in (1, 3, 9, 27)
         @test de.total_dispatched[r] == count(e -> e.params.r == r, ho.runs)
-        @test all(id -> 1 <= id <= ho.n, filter(!=(0), de.ids[r]))
+        @test all(id -> 1 <= id <= ho.n, filter(!=(0), de.subpops[r]))
     end
 
     @test_throws ArgumentError settarget!(ho, ho.n + 10)
@@ -194,14 +206,12 @@ end
 
     de = ho.sampler.inner
     n_checked = 0
-    for (r, ids) in de.ids, (slot, id) in enumerate(ids)
+    for (r, ids) in de.subpops, (slot, id) in enumerate(ids)
         id == 0 && continue
         entry = ho.runs[id]
         @test entry.status == BigHOPs.Completed
         @test entry.params.r == r
         @test entry.metadata[:slot] == slot
-        @test de.subpops[r][slot] == entry.unit_params
-        @test de.fitness[r][slot] == entry.value
 
         rivals = [e for e in ho.runs
                   if e.status == BigHOPs.Completed && e.params.r == r && e.metadata[:slot] == slot]
@@ -218,7 +228,7 @@ end
     run!(ho; show_progress=false)
 
     de = ho.sampler.inner
-    for (r, ids) in de.ids, (slot, id) in enumerate(ids)
+    for (r, ids) in de.subpops, (slot, id) in enumerate(ids)
         id == 0 && continue
         @test id == maximum(e.id for e in ho.runs if e.params.r == r && e.metadata[:slot] == slot)
     end
