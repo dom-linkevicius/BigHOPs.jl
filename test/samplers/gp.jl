@@ -62,6 +62,14 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     @test_logs (:warn, r"only 1 of the 2 initial trials completed; strict_initialization") BigHOPs.ask!(ho_strict)
     @test_logs BigHOPs.ask!(ho_strict)
     @test ho_strict.sampler.posterior[] !== nothing
+    ho_last_failed = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=2), n=5)
+    last_failed = [BigHOPs.ask!(ho_last_failed) for _ in 1:2]
+    BigHOPs.tell!(ho_last_failed, last_failed[1], 1.0)
+    @test ho_last_failed.sampler.posterior[] === nothing
+    with_logger(NullLogger()) do
+        BigHOPs.tell!(ho_last_failed, last_failed[2], ErrorException("simulated failure"))
+    end
+    @test ho_last_failed.sampler.posterior[] !== nothing
     ho_strict_ok = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(strict_initialization=true), n=8)
     @test_logs run!(ho_strict_ok; show_progress=false)
     @test length(ho_strict_ok.completed) == 8
@@ -81,11 +89,24 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     end
     n_completed = count(e -> e.status == BigHOPs.Completed, ho_fit.runs)
     @test 0 < n_completed < 20
-    @test first.(seen) == 1:n_completed
+    @test first.(seen) == count(e -> e.status == BigHOPs.Completed, ho_fit.runs[1:5]):n_completed
     @test all(abs(s) < 1e-8 for (_, s, _) in seen)
     @test all(isapprox(ss, n - 1) for (n, _, ss) in seen[2:end])
     @test ho_fit.sampler.posterior[].prior === refitted
     @test ho_fit.sampler.noise[] == 1e-6
+
+    lenient_seen = Int[]
+    ho_lenient = Hyperoptimizer(gp_failing, candidates; sampler=gp_sampler(strict_initialization=false, fit_hyperparams=(X, y) -> (push!(lenient_seen, length(X)); refitted)), n=20)
+    with_logger(NullLogger()) do
+        run!(ho_lenient; show_progress=false)
+    end
+    @test count(e -> e.status != BigHOPs.Completed, ho_lenient.runs) > 0
+    @test lenient_seen == 5:count(e -> e.status == BigHOPs.Completed, ho_lenient.runs)
+
+    no_initial_seen = Int[]
+    ho_no_initial = Hyperoptimizer(gp_bowl, candidates; sampler=gp_sampler(n_initial=0, fit_hyperparams=(X, y) -> (push!(no_initial_seen, length(X)); refitted)), n=4)
+    run!(ho_no_initial; show_progress=false)
+    @test no_initial_seen == 1:4
 
     noise_sampler = gp_sampler(fit_hyperparams=(X, y) -> (refitted, 0.25))
     ho_noise = Hyperoptimizer(gp_bowl, candidates; sampler=noise_sampler, n=8)
@@ -149,7 +170,7 @@ end
     @test ho.n_pending == 0
     @test ho.status == BigHOPs.Finished
     @test sort([e.id for e in ho.runs]) == collect(1:30)
-    @test seen == 1:30
+    @test seen == 5:30
 
     resolved_when_asked = Int[]
     ho_ref = Ref{Any}()
@@ -190,7 +211,7 @@ end
         @test ho.n_pending == 0
         @test ho.status == BigHOPs.Finished
         @test sort([e.id for e in ho.runs]) == collect(1:8)
-        @test seen == 1:8
+        @test seen == 3:8
     finally
         rmprocs(filter(!=(1), workers()))
     end

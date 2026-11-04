@@ -71,9 +71,16 @@ end
 _fitted!(::GPSampler, returned) =
     throw(ArgumentError("fit_hyperparams must return a GP or a (gp, noise) pair, got a $(typeof(returned))"))
 
+function _initializing(s::GPSampler, runs)
+    s.strict_initialization || return count(e -> e.status === Completed, runs) < s.n_initial
+    return length(runs) < s.n_initial || any(e -> e.status === Pending, view(runs, 1:s.n_initial))
+end
+
 function on_tell!(s::GPSampler, runs, entry::RunEntry)
-    entry.status === Completed || return nothing
+    _initializing(s, runs) && return nothing
+    entry.status === Completed || s.posterior[] === nothing || return nothing
     done = filter(e -> e.status === Completed, runs)
+    isempty(done) && return nothing
     X = ColVecs(stack(e.unit_params for e in done))
     observed = Float64[e.value for e in done]
     y = s.standardize === nothing ? observed : s.standardize(observed)
