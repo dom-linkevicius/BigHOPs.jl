@@ -30,7 +30,7 @@ The package currently implements the following samplers:
   - `SobolSampler`, which takes each sample as the next point of a randomly shifted Sobol sequence, so it needs no fixed number of samples and stays evenly spread as more are drawn
 - `Hyperband`, which runs brackets of trials, using a different number of resources to train them and promoting best trials within a bracket, until the bracket reaches its resource limit
 - `ASHA`, which is the asynchronous version of Hyperband, also running brackets, but not requiring the completion of a bracket before trials are promoted
-- `DEHB`, a modified version of `Hyperband` where, after the first bracket, trials are not simply promoted between rungs but undergo differential evolution and can reach a better ceiling on larger search spaces
+- `DEHB`, a modified version of `Hyperband` where, after the first iteration, trials are not simply promoted between rungs but undergo differential evolution and can reach a better ceiling on larger search spaces
 - `GPSampler`, which models the objective as a Gaussian process, updated after every completed trial, and chooses each new trial from that model, for example by Thompson sampling (`ThompsonSampling`)
 
 ## Convenience functionality
