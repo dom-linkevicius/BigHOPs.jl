@@ -1,14 +1,14 @@
 """
     GPSampler(gp; next_point, noise, n_initial, initial=SobolSampler(), fit_hyperparams=nothing, standardize=BigHOPs.zscore, strict_initialization=true, rng=StableRNG(1))
 
-Model the objective as a Gaussian process over the unit-encoded hyperparameters, conditioned on every `Completed` trial after each tell, and let `next_point` choose each new trial. `Nominal` hyperparameters enter the kernel through their ordered unit encoding.
+Model the objective as a Gaussian process over the unit-encoded hyperparameters and let `next_point` choose each new trial once the initial trials are done. From then on, the GP is conditioned on every `Completed` trial after each tell; during the initial trials it is not. `Nominal` hyperparameters enter the kernel through their ordered unit encoding.
 
 - `gp`: an AbstractGPs prior, e.g. `GP(Matern52Kernel())`.
 - `next_point(posterior, d, rng)`: return the next trial as a point in `[0, 1]^d`, e.g. `ThompsonSampling`.
 - `noise`: the observation noise variance, or `nothing` when `fit_hyperparams` returns one. A noise returned by `fit_hyperparams` replaces it, with a warning the first time if it was a number; the one in use is `ho.sampler.noise[]`.
 - `n_initial`: how many trials `initial` draws before `next_point` is used. No further trial is proposed until all of them have finished; `next_point` then takes over from those that completed, with a warning if that is fewer than `n_initial`.
 - `initial`: the sampler that draws the initial trials, `SobolSampler` by default, or `RandomSampler`, or `LHSampler` when `strict_initialization` is `true`.
-- `fit_hyperparams(X, y)`: return either the GP to condition on, e.g. one with refitted kernel hyperparameters, or a `(gp, noise)` pair to refit the noise variance too. When `nothing`, `gp` is used as given.
+- `fit_hyperparams(X, y)`: called before each conditioning; return either the GP to condition on, e.g. one with refitted kernel hyperparameters, or a `(gp, noise)` pair to refit the noise variance too. When `nothing`, `gp` is used as given.
 - `standardize(y)`: transform the observed values before `fit_hyperparams` and conditioning; the default shifts and scales them to mean 0 and standard deviation 1. When `nothing`, they are used as given.
 - `strict_initialization`: when `false`, each initial trial that does not complete gets an extra trial from `initial` instead, with a warning, until `n_initial` have completed; the unsuccessful ones stay in the results, and new proposals wait only while the initial trials still running could complete the set.
 
