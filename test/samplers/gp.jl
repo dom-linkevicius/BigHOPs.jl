@@ -120,7 +120,7 @@ gp_bowl(p) = (p.x - 0.3)^2 + (p.y - 0.7)^2
     @test_logs run!(ho_nothing; show_progress=false)
     @test ho_nothing.sampler.noise[] == 0.25
     for bad_fit in ((X, y) -> refitted, (X, y) -> (refitted, -1.0), (X, y) -> (refitted, 0.25, 1))
-        @test_throws ArgumentError run!(Hyperoptimizer(gp_bowl, candidates; sampler=fitted_noise(bad_fit), n=2); show_progress=false)
+        @test_throws ArgumentError run!(Hyperoptimizer(gp_bowl, candidates; sampler=fitted_noise(bad_fit), n=5); show_progress=false)
     end
 
     raw = Vector{Float64}[]
