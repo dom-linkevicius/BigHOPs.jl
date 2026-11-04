@@ -8,7 +8,8 @@ const SAMPLER_COLORS = Dict("Random" => Makie.wong_colors()[1], "Hyperband" => M
 
 const PLOTS = (
     (ncat=32, ncont=32, samplers=("Random", "Hyperband", "DEHB", "GP"), xlims=(0.015, 1e6), ylims=(0.015, 0.5)),
-    (ncat=8, ncont=8, samplers=("Random", "Hyperband", "DEHB", "GP"), xlims=(1e-1, 1e4), ylims=(1e-3, 1e0)),
+    (ncat=8, ncont=8, samplers=("Random", "Hyperband", "DEHB", "GP"), xlims=(1e-1, 1e4), ylims=(1e-3, 1e0),
+     labels=Dict("GP" => "GP (async Thompson Sampling)")),
 )
 
 const GRID = exp10.(range(-2, 6; length=160))
@@ -58,7 +59,7 @@ columnwise(f, curves) = [any(isnan, c) || f(c) <= 0 ? NaN : f(c) for c in eachco
 
 standard_error(c) = std(c) / sqrt(length(c))
 
-function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims)
+function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims, labels=Dict{String,String}())
     decades = ylims === nothing ? nothing : floor(Int, log10(ylims[1])):ceil(Int, log10(ylims[2]))
     fig = Figure(size=(750, 400))
     ax = Axis(fig[1, 1]; xlabel="cumulative budget / b_max", ylabel="normalized regret",
@@ -73,7 +74,7 @@ function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims)
         curves = load_curves(ncat, ncont, name)
         repeats = size(curves, 1)
         color = SAMPLER_COLORS[name]
-        lines!(ax, GRID, columnwise(mean, curves); label=name, color=color)
+        lines!(ax, GRID, columnwise(mean, curves); label=get(labels, name, name), color=color)
         band!(ax, GRID, columnwise(c -> mean(c) - standard_error(c), curves), columnwise(c -> mean(c) + standard_error(c), curves); color=(color, 0.15))
     end
     ax.title = "Stochastic Counting Ones, $ncat categorical + $ncont continuous ($repeats repeats)"
