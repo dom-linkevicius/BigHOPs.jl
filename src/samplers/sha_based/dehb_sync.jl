@@ -59,14 +59,6 @@ function _members(s::DEHB, runs, r::Int, n::Int)
     return append!(members, [rand(s.inner.rng, length(first(runs).unit_params)) for _ in 1:(n-length(members))])
 end
 
-function _global_pool(s::DEHB, runs)
-    pool = Vector{Vector{Float64}}()
-    for slots in values(s.inner.subpops)
-        append!(pool, Vector{Float64}[id == 0 ? rand(s.inner.rng, length(first(runs).unit_params)) : runs[id].unit_params for id in slots])
-    end
-    return pool
-end
-
 function _de_trial(s::DEHBSampler, target::Vector{Float64}, parents::Vector{Vector{Float64}})
     i = findfirst(==(target), parents)
     if i !== nothing && length(parents) > 1
@@ -119,10 +111,12 @@ function _sample_sh_inner(s::DEHB, candidates, runs, r::Int, parents)
     de = s.inner
 
     occupant = de.subpops[r][_next_slot(s, runs, r)]
-    pool = _global_pool(s, runs)
-
     target = occupant == 0 ? rand(de.rng, length(candidates)) : runs[occupant].unit_params
-    append!(parents, rand(de.rng, pool, max(0, 3 - length(parents))))
+    if length(parents) < 3
+        for id in rand(de.rng, reduce(vcat, values(de.subpops)), 3 - length(parents))
+            push!(parents, id == 0 ? rand(de.rng, length(candidates)) : runs[id].unit_params)
+        end
+    end
     return _de_trial(de, target, parents)
 end
 
