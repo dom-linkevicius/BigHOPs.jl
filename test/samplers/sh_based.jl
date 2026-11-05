@@ -167,6 +167,37 @@ end
     end
 end
 
+@testset "Hyperband/ASHA/DEHB start the next bracket while earlier ones wait" begin
+    @info "Testing that brackets waiting on results let the next bracket, then the next iteration, start, while earlier brackets keep priority"
+
+    for sampler in (Hyperband(R=9, η=3, r_min=1), ASHA(R=9, η=3, r_min=1), DEHB(R=9, η=3, r_min=1))
+        ho = Hyperoptimizer(nothing, (a=Continuous(0, 1),), sampler)
+        first_rung = [BigHOPs.ask!(ho) for _ in 1:9]
+        @test all(e -> e.metadata[:bracket] == 1 && e.metadata[:rung] == 1, first_rung)
+        overlap = BigHOPs.ask!(ho)
+        @test overlap.metadata[:bracket] == 2 && overlap.metadata[:rung] == 1
+        for (i, e) in enumerate(first_rung)
+            BigHOPs.tell!(ho, e, Float64(i))
+        end
+        promoted = BigHOPs.ask!(ho)
+        @test promoted.metadata[:bracket] == 1 && promoted.metadata[:rung] == 2
+    end
+
+    for sampler in (Hyperband(R=3, η=3, r_min=1, iterations=2), ASHA(R=3, η=3, r_min=1, iterations=2),
+                    DEHB(R=3, η=3, r_min=1, iterations=2))
+        ho = Hyperoptimizer(nothing, (a=Continuous(0, 1),), sampler)
+        first_pass = [BigHOPs.ask!(ho) for _ in 1:5]
+        @test [(e.metadata[:bracket], e.metadata[:rung]) for e in first_pass] == [(1, 1), (1, 1), (1, 1), (2, 1), (2, 1)]
+        next_iteration = BigHOPs.ask!(ho)
+        @test next_iteration.metadata[:iteration] == 2 && next_iteration.metadata[:bracket] == 1
+    end
+
+    ho = Hyperoptimizer(nothing, (a=Continuous(0, 1),), Hyperband(R=3, η=3, r_min=1))
+    foreach(_ -> BigHOPs.ask!(ho), 1:5)
+    @test BigHOPs.blocked(ho.sampler, ho)
+    @test !BigHOPs.exhausted(ho.sampler, ho)
+end
+
 @testset "Hyperband/ASHA under DistributedQueue executor" begin
     @info "Testing Hyperband/ASHA under the DistributedQueue executor (cross-bracket promotion correctness under real concurrency)"
 

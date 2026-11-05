@@ -98,11 +98,19 @@ _wait() = SHDecision{:wait}(missing, missing, missing)
 _exhausted() = SHDecision{:exhausted}(missing, missing, missing)
 
 function _manage_decide!(s::SuccessiveHalving, runs)
+    i = 1
     while true
-        isempty(s.active_brackets) && _open_next!(s) === nothing && return _exhausted()
-        decision = _bracket_decision(s, first(s.active_brackets), runs)
-        decision isa SHDecision{:exhausted} || return decision
-        popfirst!(s.active_brackets)
+        if i > length(s.active_brackets) && _open_next!(s) === nothing
+            return isempty(s.active_brackets) ? _exhausted() : _wait()
+        end
+        decision = _bracket_decision(s, s.active_brackets[i], runs)
+        if decision isa SHDecision{:exhausted}
+            deleteat!(s.active_brackets, i)
+        elseif decision isa SHDecision{:wait}
+            i += 1
+        else
+            return decision
+        end
     end
 end
 
@@ -147,8 +155,10 @@ _sample_sh_inner(s::SuccessiveHalving, candidates, runs, ::SHDecision{:draw}) = 
 _sample_sh_inner(inner::Sampler, candidates, runs) = inner(candidates, runs)
 _sample_sh_inner(inner::LHSampler, candidates, runs) = inner(candidates, filter(e -> e.metadata[:rung] == 1, runs))
 
+_init_inner(inner::Sampler, s::SuccessiveHalving, candidates) = init(inner, candidates, _total_draws(s))
+
 function init(s::SuccessiveHalving{Sync}, candidates, n) where {Sync}
-    inner = init(s.inner, candidates, _total_draws(s))
+    inner = _init_inner(s.inner, s, candidates)
     return SuccessiveHalving{Sync,typeof(inner)}(s.R, s.r_min, s.η, s.iterations, inner,
                                                  ActiveBracket[], Ref(1), Ref(0))
 end

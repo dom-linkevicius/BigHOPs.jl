@@ -3,7 +3,15 @@ const SHSync = SuccessiveHalving{true}
 """
     Hyperband(; R, η=3, r_min=1, iterations=1, inner=RandomSampler())
 
-Successive halving over brackets that start at resource levels from `r_min` up to `R`: after each rung the best `1/η` of trials continue with `η` times the resource, and a rung must finish before any of its trials are promoted (Li et al., 2018, https://doi.org/10.48550/arXiv.1603.06560). `iterations` repeats the whole schedule, `inner` draws the starting configurations, and the objective receives the resource level as `p.r`.
+Successive halving over brackets that start at resource levels from `r_min` up to `R`: after
+each rung the best `1/η` of trials continue with `η` times the resource, and a rung must
+finish before any of its trials are promoted (Li et al., 2018,
+https://doi.org/10.48550/arXiv.1603.06560). `iterations` repeats the whole schedule, `inner`
+draws the starting configurations, and the objective receives the resource level as `p.r`.
+
+When every open bracket is waiting on results and the executor has spare capacity, the next
+bracket starts, from the next iteration if needed; earlier brackets keep priority for every
+new trial.
 """
 const Hyperband = SuccessiveHalving{true,<:BasicSamplers}
 
@@ -36,7 +44,10 @@ function _rung_resolved(s::SHSync, runs, bracket::ActiveBracket, rung::Int)
     return _dispatched_count(bracket.rungs[rung]) == n_expected && _pending_count(runs, bracket.rungs[rung]) == 0
 end
 
+_tell_inner!(::Sampler, s, runs, entry) = nothing
+
 function on_tell!(s::SHSync, runs, entry)
+    _tell_inner!(s.inner, s, runs, entry)
     bracket = _bracket_of(s, entry)
     rung = entry.metadata[:rung]
     rung < length(bracket.rungs) || return nothing
