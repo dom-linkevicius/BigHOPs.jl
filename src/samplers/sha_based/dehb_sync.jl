@@ -78,15 +78,13 @@ function _de_trial(s::DEHBSampler, target::Vector{Float64}, parents::Vector{Vect
     parents = vcat(parents, [rand(s.rng, length(target)) for _ in 1:(3-length(parents))])
     r1, r2, r3 = parents[randperm(s.rng, length(parents))[1:3]]
     mutant = r1 .+ s.F .* (r2 .- r3)
+    out_of_range = .!(0 .<= mutant .<= 1)
+    mutant[out_of_range] .= rand(s.rng, count(out_of_range))
+    forced = rand(s.rng, eachindex(target))
 
     cross = rand(s.rng, length(target)) .< s.crossover
-    if !any(cross)
-        cross[rand(s.rng, eachindex(target))] = true
-    end
-    trial = ifelse.(cross, mutant, target)
-    out_of_range = .!(0 .<= trial .<= 1)
-    trial[out_of_range] .= rand(s.rng, count(out_of_range))
-    return trial
+    cross[forced] = 1
+    return ifelse.(cross, mutant, target)
 end
 
 _init_bracket(bracket::ActiveBracket) = bracket.iteration == 1 && bracket.bracket == 1
