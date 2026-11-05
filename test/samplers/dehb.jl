@@ -164,7 +164,7 @@ end
     sampler() = DEHB(R=9, η=3, r_min=1)
     stateful = Stateful((p; pre_artefact=nothing) -> (p.a, nothing))
 
-    @test_logs (:warn, r"promotions in the first iteration") match_mode = :any Hyperoptimizer(stateful, (a=Nominal([1]),), sampler())
+    @test_logs (:warn, r"never sets pre_artefact") match_mode = :any Hyperoptimizer(stateful, (a=Nominal([1]),), sampler())
     @test_logs min_level = Logging.Warn Hyperoptimizer(p -> p.a, (a=Nominal([1]),), sampler())
     @test_logs min_level = Logging.Warn Hyperoptimizer(nothing, (a=Nominal([1]),), sampler())
 end
@@ -264,8 +264,8 @@ end
     @test n_evolved > 0
 end
 
-@testset "DEHB carries pre_artefact only through first-iteration promotions" begin
-    @info "Testing that promotions in iteration 1 resume from the promoted trial's state and nothing else does"
+@testset "DEHB never sets pre_artefact" begin
+    @info "Testing that every DEHB trial trains from scratch under a Stateful objective, promotions included, while post_artefact is still recorded"
 
     call_id = Ref(0)
     function stateful_obj(p; pre_artefact=nothing)
@@ -273,14 +273,12 @@ end
         return (p.a - 3.0)^2 + 1.0 / p.r, (call_id[], pre_artefact === nothing ? nothing : pre_artefact[1])
     end
 
-    ho = @test_logs (:warn, r"promotions in the first iteration") match_mode = :any Hyperoptimizer(
+    ho = @test_logs (:warn, r"never sets pre_artefact") match_mode = :any Hyperoptimizer(
         Stateful(stateful_obj), (a=Continuous(0, 10),), DEHB(R=27, η=3, r_min=1, iterations=2))
     run!(ho; show_progress=false)
 
-    resumed = filter(e -> e.pre_artefact !== nothing, ho.runs)
-    @test !isempty(resumed)
-    @test all(e -> e.metadata[:iteration] == 1 && e.metadata[:rung] > 1, resumed)
-    @test all(e -> e.pre_artefact == ho.runs[e.metadata[:promoted_from]].post_artefact, resumed)
+    @test any(e -> haskey(e.metadata, :promoted_from), ho.runs)
+    @test all(e -> e.pre_artefact === nothing, ho.runs)
     @test all(e -> e.post_artefact !== nothing, ho.runs)
 end
 
