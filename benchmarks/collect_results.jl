@@ -18,7 +18,7 @@ const CANDIDATES = (
 const ETA = 3
 
 const N_TRIALS = DEPLOY ? BigHOPs._total_draws(R_MAX, R_MIN, ETA) : 4
-const REGRET_REPEATS = parse(Int, get(ENV, "BIGHO_BENCHMARK_REPEATS", DEPLOY ? "10" : "2"))
+const REGRET_REPEATS = parse(Int, get(ENV, "BIGHO_BENCHMARK_REPEATS", DEPLOY ? "20" : "2"))
 
 if DEPLOY
     smax = BigHOPs._smax(R_MAX, R_MIN, ETA)
