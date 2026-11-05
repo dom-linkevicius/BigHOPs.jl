@@ -27,7 +27,7 @@ create_run_entry(::DEHBSampler, ho, id, params, unit_params) = _dehb_standalone(
 """
     DEHB(; R, η=3, r_min=1, iterations=1, F=0.5, crossover=0.5, rng=StableRNG(1))
 
-`Hyperband`'s schedule with differential evolution in place of random draws (Awad et al., 2021, https://doi.org/10.24963/ijcai.2021/296), following the reference implementation (https://github.com/automl/DEHB) except that the first rung of the first bracket is drawn uniformly at random, as in the paper. Each resource level keeps a subpopulation, and every other first-rung trial is evolved from its own level's subpopulation; a trial whose subpopulation slot is still empty is crossed with a random target instead. In the first iteration, later rungs promote the best configurations from the level below unchanged, so a `Stateful` objective receives their `pre_artefact`; in later iterations every trial is evolved from the level below and trains from scratch.
+`Hyperband`'s schedule with differential evolution in place of random draws, following the paper (Awad et al., 2021, https://doi.org/10.24963/ijcai.2021/296), with the details it leaves open taken from the reference implementation (https://github.com/automl/DEHB). Each resource level keeps a subpopulation. The first rung of the first bracket is drawn uniformly at random, and every other first-rung trial is evolved from its own level's subpopulation, with a random target standing in for a slot that is still empty. In the first iteration, later rungs promote the best configurations from the level below unchanged, so a `Stateful` objective receives their `pre_artefact`; in later iterations every trial is evolved from the level below and trains from scratch.
 """
 const DEHB = SuccessiveHalving{true,<:DEHBSampler}
 
