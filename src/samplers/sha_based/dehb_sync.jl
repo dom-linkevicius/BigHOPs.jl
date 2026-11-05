@@ -89,8 +89,6 @@ end
 
 _init_bracket(bracket::ActiveBracket) = bracket.iteration == 1 && bracket.bracket == 1
 
-_promotion_phase(bracket::ActiveBracket) = bracket.iteration == 1
-
 function _promotion_candidate(s::DEHB, runs, d::SHDecision{:promote})
     lower, higher = d.rung.resource, d.bracket.rungs[d.rung.rung+1].resource
     ranked = _ranked(runs, filter(!=(0), s.inner.subpops[lower]))
@@ -100,11 +98,11 @@ function _promotion_candidate(s::DEHB, runs, d::SHDecision{:promote})
 end
 
 _propose(d::SHDecision{:promote}, s::DEHB, candidates, runs) =
-    _promotion_phase(d.bracket) ? copy(runs[_promotion_candidate(s, runs, d)].unit_params) :
+    d.bracket.iteration == 1 ? copy(runs[_promotion_candidate(s, runs, d)].unit_params) :
     _sample_sh_inner(s, candidates, runs, d)
 
 function _entry_for(d::SHDecision{:promote}, s::DEHB, ho, id, params, unit_params)
-    _promotion_phase(d.bracket) && return @invoke _entry_for(_promote(d.bracket, d.rung, _promotion_candidate(s, ho.runs, d))::SHDecision{:promote}, s::SuccessiveHalving, ho, id, params, unit_params)
+    d.bracket.iteration == 1 && return @invoke _entry_for(_promote(d.bracket, d.rung, _promotion_candidate(s, ho.runs, d))::SHDecision{:promote}, s::SuccessiveHalving, ho, id, params, unit_params)
     target = d.bracket.rungs[d.rung.rung+1]
     return RunEntry(id, _add_r(params, target.resource), unit_params, _metadata(d.bracket, target.rung))
 end
