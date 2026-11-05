@@ -15,7 +15,7 @@ function DEHBSampler(; F::Real=0.5, crossover::Real=0.5, rng::Random.AbstractRNG
     return DEHBSampler(Float64(F), Float64(crossover), rng, Dict{Int,Vector{Int}}())
 end
 
-init(s::DEHBSampler, candidates, n) = DEHBSampler(s.F, s.crossover, s.rng, Dict{Int,Vector{Int}}())
+init(s::DEHBSampler, candidates, n) = s
 
 _dehb_standalone() = throw(ArgumentError("DEHBSampler can't be used on its own; construct DEHB(; R, ...) instead"))
 on_tell!(::DEHBSampler, runs, entry) = _dehb_standalone()
@@ -47,13 +47,13 @@ SuccessiveHalving{true,<:DEHBSampler}(; R::Int, η::Int=3, r_min::Int=1, iterati
 
 _check_objective(s::DEHB, objective) = objective isa Stateful && @warn "$(typeof(s)) with a Stateful objective: DEHB never sets pre_artefact, so every trial trains from scratch; Stateful only records post_artefact"
 
-function init(s::DEHB, candidates, n)
-    sh = @invoke init(s::SuccessiveHalving, candidates, n)
+function _init_inner(inner::DEHBSampler, s::SuccessiveHalving, candidates)
+    de = DEHBSampler(inner.F, inner.crossover, inner.rng, Dict{Int,Vector{Int}}())
     for bracket in 1:(_smax(s.R, s.r_min, s.η)+1)
         r = _resource(s.R, s.r_min, s.η, bracket, 1)
-        sh.inner.subpops[r] = zeros(Int, _capacity(s.R, s.r_min, s.η, bracket, 1))
+        de.subpops[r] = zeros(Int, _capacity(s.R, s.r_min, s.η, bracket, 1))
     end
-    return sh
+    return de
 end
 
 _next_slot(s::DEHB, runs, r::Int) = mod(count(e -> e.params.r == r, runs), length(s.inner.subpops[r])) + 1

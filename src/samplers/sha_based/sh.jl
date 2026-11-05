@@ -155,8 +155,10 @@ _sample_sh_inner(s::SuccessiveHalving, candidates, runs, ::SHDecision{:draw}) = 
 _sample_sh_inner(inner::Sampler, candidates, runs) = inner(candidates, runs)
 _sample_sh_inner(inner::LHSampler, candidates, runs) = inner(candidates, filter(e -> e.metadata[:rung] == 1, runs))
 
+_init_inner(inner::Sampler, s::SuccessiveHalving, candidates) = init(inner, candidates, _total_draws(s))
+
 function init(s::SuccessiveHalving{Sync}, candidates, n) where {Sync}
-    inner = init(s.inner, candidates, _total_draws(s))
+    inner = _init_inner(s.inner, s, candidates)
     return SuccessiveHalving{Sync,typeof(inner)}(s.R, s.r_min, s.η, s.iterations, inner,
                                                  ActiveBracket[], Ref(1), Ref(0))
 end

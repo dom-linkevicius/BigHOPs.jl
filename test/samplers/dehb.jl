@@ -20,8 +20,7 @@ end
     @info "Testing that a bare DEHBSampler rejects every Sampler entry point"
 
     de = BigHOPs.DEHBSampler()
-    fresh = BigHOPs.init(de, (a=Nominal([1]),), 5)
-    @test fresh !== de && fresh.rng === de.rng && isempty(fresh.subpops)
+    @test BigHOPs.init(de, (a=Nominal([1]),), 5) === de
 
     @test_throws ArgumentError BigHOPs.on_tell!(de, BigHOPs.RunEntry[], nothing)
     @test_throws ArgumentError BigHOPs.exhausted(de, nothing)
