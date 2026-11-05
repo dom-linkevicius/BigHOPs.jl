@@ -44,7 +44,10 @@ function _rung_resolved(s::SHSync, runs, bracket::ActiveBracket, rung::Int)
     return _dispatched_count(bracket.rungs[rung]) == n_expected && _pending_count(runs, bracket.rungs[rung]) == 0
 end
 
+_tell_inner!(::Sampler, s, runs, entry) = nothing
+
 function on_tell!(s::SHSync, runs, entry)
+    _tell_inner!(s.inner, s, runs, entry)
     bracket = _bracket_of(s, entry)
     rung = entry.metadata[:rung]
     rung < length(bracket.rungs) || return nothing

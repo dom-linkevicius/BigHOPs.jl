@@ -128,8 +128,7 @@ function _sample_sh_inner(s::DEHB, candidates, runs, r::Int, parents)
     return _de_trial(de, target, parents)
 end
 
-function on_tell!(s::DEHB, runs, entry)
-    de = s.inner
+function _tell_inner!(de::DEHBSampler, s, runs, entry)
     if entry.status === Completed
         r = entry.params.r
         slot = _slot(s, runs, r, entry.id)
@@ -138,5 +137,5 @@ function on_tell!(s::DEHB, runs, entry)
             de.subpops[r][slot] = entry.id
         end
     end
-    return @invoke on_tell!(s::SHSync, runs, entry)
+    return nothing
 end
