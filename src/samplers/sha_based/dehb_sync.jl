@@ -49,10 +49,7 @@ function init(s::DEHB, candidates, n)
     return sh
 end
 
-function _next_slot(s::DEHB, runs, r::Int)
-    de = s.inner
-    return mod(count(e -> e.params.r == r, runs), length(de.subpops[r])) + 1
-end
+_next_slot(s::DEHB, runs, r::Int) = mod(count(e -> e.params.r == r, runs), length(s.inner.subpops[r])) + 1
 
 _ranked(runs, ids) = ids[sortperm([runs[id].value for id in ids])]
 
@@ -93,8 +90,7 @@ function _promotion_candidate(s::DEHB, runs, d::SHDecision{:promote})
     lower, higher = d.rung.resource, d.bracket.rungs[d.rung.rung+1].resource
     ranked = _ranked(runs, filter(!=(0), s.inner.subpops[lower]))
     run_higher = Set(e.unit_params for e in runs if e.params.r == higher)
-    i = findfirst(id -> runs[id].unit_params ∉ run_higher, ranked)
-    return i === nothing ? first(ranked) : ranked[i]
+    return ranked[something(findfirst(id -> runs[id].unit_params ∉ run_higher, ranked), 1)]
 end
 
 _propose(d::SHDecision{:promote}, s::DEHB, candidates, runs) =
