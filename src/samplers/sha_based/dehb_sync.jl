@@ -47,23 +47,21 @@ SuccessiveHalving{true,<:DEHBSampler}(; R::Int, η::Int=3, r_min::Int=1, iterati
 
 _check_objective(s::DEHB, objective) = objective isa Stateful && @warn "$(typeof(s)) with a Stateful objective: DEHB never sets pre_artefact, so every trial trains from scratch; Stateful only records post_artefact"
 
-_subpop_size(s::DEHB, bracket::Int) = _capacity(s.R, s.r_min, s.η, bracket, 1)
-
 function init(s::DEHB, candidates, n)
     sh = @invoke init(s::SuccessiveHalving, candidates, n)
     for bracket in 1:(_smax(s.R, s.r_min, s.η)+1)
         r = _resource(s.R, s.r_min, s.η, bracket, 1)
-        sh.inner.subpops[r] = zeros(Int, _subpop_size(s, bracket))
+        sh.inner.subpops[r] = zeros(Int, _capacity(s.R, s.r_min, s.η, bracket, 1))
     end
     return sh
 end
 
 _next_slot(s::DEHB, runs, r::Int) = mod(count(e -> e.params.r == r, runs), length(s.inner.subpops[r])) + 1
 
-_ranked(runs, ids) = ids[sortperm([runs[id].value for id in ids])]
+_ranked(runs, slots) = sort(filter(!=(0), slots); by=id -> runs[id].value)
 
 function _members(s::DEHB, runs, r::Int, n::Int)
-    ranked = _ranked(runs, filter(!=(0), s.inner.subpops[r]))
+    ranked = _ranked(runs, s.inner.subpops[r])
     members = Vector{Float64}[runs[id].unit_params for id in ranked[1:min(n, end)]]
     return append!(members, [rand(s.inner.rng, length(first(runs).unit_params)) for _ in 1:(n-length(members))])
 end
@@ -82,7 +80,7 @@ end
 
 function _promotion_candidate(s::DEHB, runs, d::SHDecision{:promote})
     lower, higher = d.rung.resource, d.bracket.rungs[d.rung.rung+1].resource
-    ranked = _ranked(runs, filter(!=(0), s.inner.subpops[lower]))
+    ranked = _ranked(runs, s.inner.subpops[lower])
     run_higher = Set(e.unit_params for e in runs if e.params.r == higher)
     return ranked[something(findfirst(id -> runs[id].unit_params ∉ run_higher, ranked), 1)]
 end
@@ -132,8 +130,7 @@ end
 
 function create_run_entry(s::DEHB, ho, id, params, unit_params)
     entry = @invoke create_run_entry(s::SuccessiveHalving, ho, id, params, unit_params)
-    r = entry.params.r
-    entry.metadata[:slot] = _next_slot(s, ho.runs, r)
+    entry.metadata[:slot] = _next_slot(s, ho.runs, entry.params.r)
     return entry
 end
 
