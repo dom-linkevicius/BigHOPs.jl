@@ -11,7 +11,7 @@ addprocs(WORKERS; exeflags=["--project=$(Base.active_project())", "-t1"])
 const REPEATS = parse(Int, get(ENV, "BIGHO_COUNTING_ONES_REPEATS", "50"))
 
 const RUNS = (
-    (ncat=32, ncont=32, samplers=(Random=1e6, Hyperband=1e4, DEHB=1e4, GP=190.0)),
+    (ncat=32, ncont=32, samplers=(Random=1e6, Hyperband=1e4, DEHB=1e4, GP=3000.0)),
     (ncat=8, ncont=8, samplers=(Random=1e4, Hyperband=1e4, DEHB=1e4, GP=3000.0)),
 )
 
