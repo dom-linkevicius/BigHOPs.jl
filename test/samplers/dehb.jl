@@ -20,7 +20,8 @@ end
     @info "Testing that a bare DEHBSampler rejects every Sampler entry point"
 
     de = BigHOPs.DEHBSampler()
-    @test BigHOPs.init(de, (a=Nominal([1]),), 5) === de
+    fresh = BigHOPs.init(de, (a=Nominal([1]),), 5)
+    @test fresh !== de && fresh.rng === de.rng && isempty(fresh.subpops)
 
     @test_throws ArgumentError BigHOPs.on_tell!(de, BigHOPs.RunEntry[], nothing)
     @test_throws ArgumentError BigHOPs.exhausted(de, nothing)
@@ -35,21 +36,21 @@ end
 @testset "DEHB subpopulations are keyed by resource" begin
     @info "Testing that DEHB allocates one subpopulation per resource level, sized by that bracket's first rung"
 
-    s = DEHB(R=27, η=3, r_min=1)
-    de = BigHOPs._subpopulations!(s)
+    s = BigHOPs.init(DEHB(R=27, η=3, r_min=1), (a=Continuous(0, 1),), 10)
+    de = s.inner
 
     @test sort(collect(keys(de.subpops))) == [1, 3, 9, 27]
     @test [length(de.subpops[r]) for r in (1, 3, 9, 27)] == [27, 12, 6, 4]
     @test all(slots -> all(==(0), slots), values(de.subpops))
 
-    @test BigHOPs._subpopulations!(s) === de
+    @test BigHOPs.init(s, (a=Continuous(0, 1),), 10).inner.subpops !== de.subpops
     @test length(de.subpops) == 4
 end
 
 @testset "DEHB rolling slot pointer wraps within a subpopulation" begin
     @info "Testing that DEHB's target pointer counts the trials already at a resource level and wraps at the subpopulation's end"
 
-    s = DEHB(R=27, η=3, r_min=1)
+    s = BigHOPs.init(DEHB(R=27, η=3, r_min=1), (a=Continuous(0, 1),), 10)
     at(r, n) = [BigHOPs.RunEntry(i, (r=r, a=0.0), [0.5]) for i in 1:n]
 
     @test BigHOPs._next_slot(s, BigHOPs.RunEntry[], 3) == 1
@@ -63,8 +64,8 @@ end
 
     completed(id, u, v) = BigHOPs._with_result(BigHOPs.RunEntry(id, (r=1, a=0.0), u, Dict{Symbol,Any}()), BigHOPs.Completed, v, nothing)
     runs = [completed(1, [0.1, 0.1], 3.0), completed(2, [0.2, 0.2], 1.0), completed(3, [0.3, 0.3], 2.0)]
-    s = DEHB(R=27, η=3, r_min=1)
-    de = BigHOPs._subpopulations!(s)
+    s = BigHOPs.init(DEHB(R=27, η=3, r_min=1), (a=Continuous(0, 1),), 10)
+    de = s.inner
     de.subpops[1][[5, 2, 9]] = [1, 2, 3]
 
     @test BigHOPs._members(s, runs, 1, 2, 2) == [[0.2, 0.2], [0.3, 0.3]]
@@ -85,8 +86,8 @@ end
 
     completed(id, r, u, v) = BigHOPs._with_result(BigHOPs.RunEntry(id, (r=r, a=0.0), u, Dict{Symbol,Any}()), BigHOPs.Completed, v, nothing)
     runs = [completed(i, 1, [0.1i], v) for (i, v) in enumerate([3.0, 1.0, 2.0, 4.0])]
-    s = DEHB(R=9, η=3, r_min=1)
-    de = BigHOPs._subpopulations!(s)
+    s = BigHOPs.init(DEHB(R=9, η=3, r_min=1), (a=Continuous(0, 1),), 10)
+    de = s.inner
     de.subpops[1][1:4] = 1:4
 
     bracket = BigHOPs._make_bracket(s, 1, 1)

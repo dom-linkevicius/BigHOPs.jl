@@ -15,7 +15,7 @@ function DEHBSampler(; F::Real=0.5, crossover::Real=0.5, rng::Random.AbstractRNG
     return DEHBSampler(Float64(F), Float64(crossover), rng, Dict{Int,Vector{Int}}())
 end
 
-init(s::DEHBSampler, candidates, n) = s
+init(s::DEHBSampler, candidates, n) = DEHBSampler(s.F, s.crossover, s.rng, Dict{Int,Vector{Int}}())
 
 _dehb_standalone() = throw(ArgumentError("DEHBSampler can't be used on its own; construct DEHB(; R, ...) instead"))
 on_tell!(::DEHBSampler, runs, entry) = _dehb_standalone()
@@ -40,25 +40,24 @@ _check_objective(s::DEHB, objective) = objective isa Stateful && @warn "$(typeof
 
 _subpop_size(s::DEHB, bracket::Int) = _capacity(s.R, s.r_min, s.η, bracket, 1)
 
-function _subpopulations!(s::DEHB)
-    de = s.inner
-    isempty(de.subpops) || return de
+function init(s::DEHB, candidates, n)
+    sh = @invoke init(s::SuccessiveHalving, candidates, n)
     for bracket in 1:(_smax(s.R, s.r_min, s.η)+1)
         r = _resource(s.R, s.r_min, s.η, bracket, 1)
-        de.subpops[r] = zeros(Int, _subpop_size(s, bracket))
+        sh.inner.subpops[r] = zeros(Int, _subpop_size(s, bracket))
     end
-    return de
+    return sh
 end
 
 function _next_slot(s::DEHB, runs, r::Int)
-    de = _subpopulations!(s)
+    de = s.inner
     return mod(count(e -> e.params.r == r, runs), length(de.subpops[r])) + 1
 end
 
 _ranked(runs, ids) = ids[sortperm([runs[id].value for id in ids])]
 
 function _members(s::DEHB, runs, r::Int, n::Int, d::Int)
-    ranked = _ranked(runs, filter(!=(0), _subpopulations!(s).subpops[r]))
+    ranked = _ranked(runs, filter(!=(0), s.inner.subpops[r]))
     members = Vector{Float64}[runs[id].unit_params for id in ranked[1:min(n, end)]]
     return append!(members, [rand(s.inner.rng, d) for _ in 1:(n-length(members))])
 end
@@ -92,7 +91,7 @@ _promotion_phase(bracket::ActiveBracket) = bracket.iteration == 1
 
 function _promotion_candidate(s::DEHB, runs, d::SHDecision{:promote})
     lower, higher = d.rung.resource, d.bracket.rungs[d.rung.rung+1].resource
-    ranked = _ranked(runs, filter(!=(0), _subpopulations!(s).subpops[lower]))
+    ranked = _ranked(runs, filter(!=(0), s.inner.subpops[lower]))
     run_higher = Set(e.unit_params for e in runs if e.params.r == higher)
     i = findfirst(id -> runs[id].unit_params ∉ run_higher, ranked)
     return i === nothing ? first(ranked) : ranked[i]
@@ -109,7 +108,7 @@ function _entry_for(d::SHDecision{:promote}, s::DEHB, ho, id, params, unit_param
 end
 
 function _evolve(s::DEHB, runs, d::Int, r::Int, r_parents::Int, n::Int)
-    de = _subpopulations!(s)
+    de = s.inner
     occupant = de.subpops[r][_next_slot(s, runs, r)]
     target = occupant == 0 ? rand(de.rng, d) : runs[occupant].unit_params
     parents = _members(s, runs, r_parents, n, d)
@@ -139,7 +138,7 @@ function create_run_entry(s::DEHB, ho, id, params, unit_params)
 end
 
 function on_tell!(s::DEHB, runs, entry)
-    de = _subpopulations!(s)
+    de = s.inner
     if entry.status === Completed
         r = entry.params.r
         slot = entry.metadata[:slot]
