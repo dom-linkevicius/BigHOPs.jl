@@ -72,7 +72,7 @@ end
 
 function _de_trial(s::DEHBSampler, target::Vector{Float64}, parents::Vector{Vector{Float64}})
     i = findfirst(==(target), parents)
-    if i !== nothing && length(parents) > 1
+    if i !== nothing
         parents = deleteat!(copy(parents), i)
     end
     parents = vcat(parents, [rand(s.rng, length(target)) for _ in 1:(3-length(parents))])
