@@ -113,7 +113,8 @@ function _sample_sh_inner(s::DEHB, candidates, runs, r::Int, parents)
     occupant = de.subpops[r][_next_slot(s, runs, r)]
     target = occupant == 0 ? rand(de.rng, length(candidates)) : runs[occupant].unit_params
     if length(parents) < 3
-        for id in rand(de.rng, reduce(vcat, values(de.subpops)), 3 - length(parents))
+        global_pool = reduce(vcat, values(de.subpops))
+        for id in rand(de.rng, global_pool, 3 - length(parents))
             push!(parents, id == 0 ? rand(de.rng, length(candidates)) : runs[id].unit_params)
         end
     end
