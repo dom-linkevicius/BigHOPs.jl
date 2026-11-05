@@ -56,7 +56,7 @@ function _init_inner(inner::DEHBSampler, s::SuccessiveHalving, candidates)
     return de
 end
 
-_next_slot(s::DEHB, runs, r::Int) = mod(count(e -> e.params.r == r, runs), length(s.inner.subpops[r])) + 1
+_slot(s::DEHB, runs, r::Int, id::Int) = mod(count(e -> e.params.r == r && e.id < id, runs), length(s.inner.subpops[r])) + 1
 
 _ranked(runs, slots) = sort(filter(!=(0), slots); by=id -> runs[id].value)
 
@@ -113,7 +113,7 @@ end
 function _sample_sh_inner(s::DEHB, candidates, runs, r::Int, parents)
     de = s.inner
 
-    occupant = de.subpops[r][_next_slot(s, runs, r)]
+    occupant = de.subpops[r][_slot(s, runs, r, length(runs) + 1)]
     target = occupant == 0 ? rand(de.rng, length(candidates)) : runs[occupant].unit_params
     i = findfirst(==(target), parents)
     if i !== nothing && length(parents) > 1
@@ -128,17 +128,11 @@ function _sample_sh_inner(s::DEHB, candidates, runs, r::Int, parents)
     return _de_trial(de, target, parents)
 end
 
-function create_run_entry(s::DEHB, ho, id, params, unit_params)
-    entry = @invoke create_run_entry(s::SuccessiveHalving, ho, id, params, unit_params)
-    entry.metadata[:slot] = _next_slot(s, ho.runs, entry.params.r)
-    return entry
-end
-
 function on_tell!(s::DEHB, runs, entry)
     de = s.inner
     if entry.status === Completed
         r = entry.params.r
-        slot = entry.metadata[:slot]
+        slot = _slot(s, runs, r, entry.id)
         occupant = de.subpops[r][slot]
         if occupant == 0 || entry.value <= runs[occupant].value
             de.subpops[r][slot] = entry.id

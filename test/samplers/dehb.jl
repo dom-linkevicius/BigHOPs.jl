@@ -47,15 +47,16 @@ end
 end
 
 @testset "DEHB rolling slot pointer wraps within a subpopulation" begin
-    @info "Testing that DEHB's target pointer counts the trials already at a resource level and wraps at the subpopulation's end"
+    @info "Testing that DEHB's target pointer counts the earlier trials at a resource level and wraps at the subpopulation's end"
 
     s = BigHOPs.init(DEHB(R=27, η=3, r_min=1), (a=Continuous(0, 1),), 10)
     at(r, n) = [BigHOPs.RunEntry(i, (r=r, a=0.0), [0.5]) for i in 1:n]
 
-    @test BigHOPs._next_slot(s, BigHOPs.RunEntry[], 3) == 1
-    @test BigHOPs._next_slot(s, at(3, 11), 3) == 12
-    @test BigHOPs._next_slot(s, at(3, 12), 3) == 1
-    @test BigHOPs._next_slot(s, [at(3, 13); at(1, 5)], 3) == 2
+    @test BigHOPs._slot(s, BigHOPs.RunEntry[], 3, 1) == 1
+    @test BigHOPs._slot(s, at(3, 11), 3, 12) == 12
+    @test BigHOPs._slot(s, at(3, 12), 3, 13) == 1
+    @test BigHOPs._slot(s, [at(3, 13); at(1, 5)], 3, 14) == 2
+    @test BigHOPs._slot(s, at(3, 11), 3, 5) == 5
 end
 
 @testset "DEHB mutation parents are the best members of a subpopulation" begin
@@ -185,11 +186,10 @@ end
     @test :r ∉ ho.params
     @test all(e -> e.params.r in (1, 3, 9, 27), ho.runs)
     @test all(e -> length(e.unit_params) == 2, ho.runs)
-    @test all(e -> haskey(e.metadata, :slot), ho.runs)
 
     de = ho.sampler.inner
     for r in (1, 3, 9, 27)
-        @test [e.metadata[:slot] for e in ho.runs if e.params.r == r] == [mod(i - 1, length(de.subpops[r])) + 1 for i in 1:count(e -> e.params.r == r, ho.runs)]
+        @test [BigHOPs._slot(ho.sampler, ho.runs, r, e.id) for e in ho.runs if e.params.r == r] == [mod(i - 1, length(de.subpops[r])) + 1 for i in 1:count(e -> e.params.r == r, ho.runs)]
         @test all(id -> 1 <= id <= ho.n, filter(!=(0), de.subpops[r]))
     end
 
@@ -212,10 +212,10 @@ end
         entry = ho.runs[id]
         @test entry.status == BigHOPs.Completed
         @test entry.params.r == r
-        @test entry.metadata[:slot] == slot
+        @test BigHOPs._slot(ho.sampler, ho.runs, r, entry.id) == slot
 
         rivals = [e for e in ho.runs
-                  if e.status == BigHOPs.Completed && e.params.r == r && e.metadata[:slot] == slot]
+                  if e.status == BigHOPs.Completed && e.params.r == r && BigHOPs._slot(ho.sampler, ho.runs, r, e.id) == slot]
         @test entry.value == minimum(e.value for e in rivals)
         n_checked += 1
     end
@@ -231,7 +231,7 @@ end
     de = ho.sampler.inner
     for (r, ids) in de.subpops, (slot, id) in enumerate(ids)
         id == 0 && continue
-        @test id == maximum(e.id for e in ho.runs if e.params.r == r && e.metadata[:slot] == slot)
+        @test id == maximum(e.id for e in ho.runs if e.params.r == r && BigHOPs._slot(ho.sampler, ho.runs, r, e.id) == slot)
     end
 end
 
@@ -318,6 +318,6 @@ end
 
     de = ho.sampler.inner
     for r in keys(de.subpops)
-        @test [e.metadata[:slot] for e in ho.runs if e.params.r == r] == [mod(i - 1, length(de.subpops[r])) + 1 for i in 1:count(e -> e.params.r == r, ho.runs)]
+        @test [BigHOPs._slot(ho.sampler, ho.runs, r, e.id) for e in ho.runs if e.params.r == r] == [mod(i - 1, length(de.subpops[r])) + 1 for i in 1:count(e -> e.params.r == r, ho.runs)]
     end
 end
