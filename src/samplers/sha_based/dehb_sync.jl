@@ -80,8 +80,6 @@ function _de_trial(s::DEHBSampler, target::Vector{Float64}, parents::Vector{Vect
     return ifelse.(cross, mutant, target)
 end
 
-_init_bracket(bracket::ActiveBracket) = bracket.iteration == 1 && bracket.bracket == 1
-
 function _promotion_candidate(s::DEHB, runs, d::SHDecision{:promote})
     lower, higher = d.rung.resource, d.bracket.rungs[d.rung.rung+1].resource
     ranked = _ranked(runs, filter(!=(0), s.inner.subpops[lower]))
@@ -104,7 +102,7 @@ end
 
 function _sample_sh_inner(s::DEHB, candidates, runs, d::SHDecision{:draw})
     r = d.rung.resource
-    _init_bracket(d.bracket) && return rand(s.inner.rng, length(candidates))
+    d.bracket.iteration == 1 && d.bracket.bracket == 1 && return rand(s.inner.rng, length(candidates))
     return _sample_sh_inner(s, candidates, runs, r,
                             _members(s, runs, r, d.rung.capacity))
 end
