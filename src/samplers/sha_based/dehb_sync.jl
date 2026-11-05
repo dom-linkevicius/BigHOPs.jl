@@ -8,13 +8,11 @@ struct DEHBSampler{T<:Random.AbstractRNG} <: Sampler
     crossover::Float64
     rng::T
     subpops::Dict{Int,Vector{Int}}
-    total_dispatched::Dict{Int,Int}
-    promotion_queues::Dict{Int,Vector{Int}}
 end
 function DEHBSampler(; F::Real=0.5, crossover::Real=0.5, rng::Random.AbstractRNG=StableRNG(1))
     0 < F <= 1 || throw(ArgumentError("F must be in (0, 1], got $F"))
     0 <= crossover <= 1 || throw(ArgumentError("crossover must be in [0,1], got $crossover"))
-    return DEHBSampler(Float64(F), Float64(crossover), rng, Dict{Int,Vector{Int}}(), Dict{Int,Int}(), Dict{Int,Vector{Int}}())
+    return DEHBSampler(Float64(F), Float64(crossover), rng, Dict{Int,Vector{Int}}())
 end
 
 init(s::DEHBSampler, candidates, n) = s
@@ -49,16 +47,15 @@ end
 
 function _subpopulations!(s::DEHB)
     de = s.inner
-    isempty(de.total_dispatched) || return de
+    isempty(de.subpops) || return de
     for bracket in 1:(_smax(s.R, s.r_min, s.η)+1)
         r = _resource(s.R, s.r_min, s.η, bracket, 1)
         de.subpops[r] = zeros(Int, _subpop_size(s, r))
-        de.total_dispatched[r] = 0
     end
     return de
 end
 
-_next_slot(s::DEHB, r::Int) = mod(s.inner.total_dispatched[r], length(s.inner.subpops[r])) + 1
+_next_slot(s::DEHB, runs, r::Int) = mod(count(e -> e.params.r == r, runs), length(_subpopulations!(s).subpops[r])) + 1
 
 _first_bracket(bracket::ActiveBracket) = bracket.iteration == 1 && bracket.bracket == 1
 _promotion_phase(bracket::ActiveBracket) = bracket.iteration == 1
@@ -91,40 +88,30 @@ end
 
 _ranked(runs, ids) = ids[sortperm([runs[id].value for id in ids])]
 
-function _mutation_pool(s::DEHB, runs, r::Int, n::Int, d::Int)
-    ranked = _ranked(runs, filter(!=(0), s.inner.subpops[r]))
-    pool = Vector{Float64}[runs[id].unit_params for id in ranked[1:min(n, end)]]
-    return append!(pool, [rand(s.inner.rng, d) for _ in 1:(n-length(pool))])
-end
-
-function _global_population(s::DEHB, runs, d::Int)
-    de = s.inner
-    return Vector{Float64}[id == 0 ? rand(de.rng, d) : runs[id].unit_params for level in sort(collect(keys(de.subpops))) for id in de.subpops[level]]
+function _members(s::DEHB, runs, r::Int, n::Int, d::Int)
+    ranked = _ranked(runs, filter(!=(0), _subpopulations!(s).subpops[r]))
+    members = Vector{Float64}[runs[id].unit_params for id in ranked[1:min(n, end)]]
+    return append!(members, [rand(s.inner.rng, d) for _ in 1:(n-length(members))])
 end
 
 function _evolve(s::DEHB, runs, d::Int, r::Int, r_parents::Int, n::Int)
     de = _subpopulations!(s)
-    occupant = de.subpops[r][_next_slot(s, r)]
+    occupant = de.subpops[r][_next_slot(s, runs, r)]
     target = occupant == 0 ? rand(de.rng, d) : runs[occupant].unit_params
-    pool = _mutation_pool(s, runs, r_parents, n, d)
+    pool = _members(s, runs, r_parents, n, d)
     if length(pool) < 3
-        everyone = _global_population(s, runs, d)
+        everyone = reduce(vcat, (_members(s, runs, level, length(slots), d) for (level, slots) in sort(collect(de.subpops))))
         append!(pool, [_mutant(de, target, everyone) for _ in 1:(4-length(pool))])
     end
     return _de_trial(de, target, pool)
 end
 
-function _promotion_candidate!(s::DEHB, runs, decision::SHDecision{:promote})
-    de = _subpopulations!(s)
-    lower, higher = decision.rung, decision.bracket.rungs[decision.rung.rung+1]
-    ranked = _ranked(runs, filter(!=(0), de.subpops[lower.resource]))
-    queue = get!(de.promotion_queues, higher.resource, Int[])
-    if isempty(queue)
-        present = [runs[id].unit_params for id in de.subpops[higher.resource] if id != 0]
-        append!(queue, [id for id in ranked if runs[id].unit_params ∉ present])
-        resize!(queue, min(length(queue), higher.capacity))
-    end
-    return isempty(queue) ? first(ranked) : first(queue)
+function _promotion_candidate(s::DEHB, runs, decision::SHDecision{:promote})
+    lower, higher = decision.rung.resource, decision.bracket.rungs[decision.rung.rung+1].resource
+    ranked = _ranked(runs, filter(!=(0), _subpopulations!(s).subpops[lower]))
+    run_higher = Set(e.unit_params for e in runs if e.params.r == higher)
+    i = findfirst(id -> runs[id].unit_params ∉ run_higher, ranked)
+    return i === nothing ? first(ranked) : ranked[i]
 end
 
 function _sample_sh_inner(s::DEHB, candidates, runs, d::SHDecision{:draw})
@@ -134,7 +121,7 @@ function _sample_sh_inner(s::DEHB, candidates, runs, d::SHDecision{:draw})
 end
 
 function _propose(d::SHDecision{:promote}, s::DEHB, candidates, runs)
-    _promotion_phase(d.bracket) && return copy(runs[_promotion_candidate!(s, runs, d)].unit_params)
+    _promotion_phase(d.bracket) && return copy(runs[_promotion_candidate(s, runs, d)].unit_params)
     higher = d.bracket.rungs[d.rung.rung+1]
     return _evolve(s, runs, length(candidates), higher.resource, d.rung.resource, higher.capacity)
 end
@@ -143,22 +130,15 @@ function _entry_for(d::SHDecision{:promote}, s::DEHB, ho, id, params, unit_param
     target = d.bracket.rungs[d.rung.rung+1]
     metadata = _metadata(d.bracket, target.rung)
     _promotion_phase(d.bracket) || return RunEntry(id, _add_r(params, target.resource), unit_params, metadata)
-    promoted_from = _promotion_candidate!(s, ho.runs, d)
+    promoted_from = _promotion_candidate(s, ho.runs, d)
     metadata[:promoted_from] = promoted_from
     return RunEntry(id, _add_r(params, target.resource), unit_params, metadata;
                     pre_artefact=ho.runs[promoted_from].post_artefact)
 end
 
 function create_run_entry(s::DEHB, ho, id, params, unit_params)
-    de = _subpopulations!(s)
     entry = @invoke create_run_entry(s::SuccessiveHalving, ho, id, params, unit_params)
-    r = entry.params.r
-    queue = get(de.promotion_queues, r, Int[])
-    if haskey(entry.metadata, :promoted_from) && !isempty(queue) && first(queue) == entry.metadata[:promoted_from]
-        popfirst!(queue)
-    end
-    entry.metadata[:slot] = _next_slot(s, r)
-    de.total_dispatched[r] += 1
+    entry.metadata[:slot] = _next_slot(s, ho.runs, entry.params.r)
     return entry
 end
 
