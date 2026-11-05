@@ -8,11 +8,12 @@ struct DEHBSampler{T<:Random.AbstractRNG} <: Sampler
     crossover::Float64
     rng::T
     subpops::Dict{Int,Vector{Int}}
+    total_dispatched::Dict{Int,Int}
 end
 function DEHBSampler(; F::Real=0.5, crossover::Real=0.5, rng::Random.AbstractRNG=StableRNG(1))
     0 < F <= 1 || throw(ArgumentError("F must be in (0, 1], got $F"))
     0 <= crossover <= 1 || throw(ArgumentError("crossover must be in [0,1], got $crossover"))
-    return DEHBSampler(Float64(F), Float64(crossover), rng, Dict{Int,Vector{Int}}())
+    return DEHBSampler(Float64(F), Float64(crossover), rng, Dict{Int,Vector{Int}}(), Dict{Int,Int}())
 end
 
 init(s::DEHBSampler, candidates, n) = s
@@ -48,15 +49,16 @@ SuccessiveHalving{true,<:DEHBSampler}(; R::Int, η::Int=3, r_min::Int=1, iterati
 _check_objective(s::DEHB, objective) = objective isa Stateful && @warn "$(typeof(s)) with a Stateful objective: DEHB never sets pre_artefact, so every trial trains from scratch; Stateful only records post_artefact"
 
 function _init_inner(inner::DEHBSampler, s::SuccessiveHalving, candidates)
-    de = DEHBSampler(inner.F, inner.crossover, inner.rng, Dict{Int,Vector{Int}}())
+    de = DEHBSampler(inner.F, inner.crossover, inner.rng, Dict{Int,Vector{Int}}(), Dict{Int,Int}())
     for bracket in 1:(_smax(s.R, s.r_min, s.η)+1)
         r = _resource(s.R, s.r_min, s.η, bracket, 1)
         de.subpops[r] = zeros(Int, _capacity(s.R, s.r_min, s.η, bracket, 1))
+        de.total_dispatched[r] = 0
     end
     return de
 end
 
-_slot(s::DEHB, runs, r::Int, id::Int) = mod(count(e -> e.params.r == r && e.id < id, runs), length(s.inner.subpops[r])) + 1
+_next_slot(s::DEHB, r::Int) = mod(s.inner.total_dispatched[r], length(s.inner.subpops[r])) + 1
 
 _ranked(runs, slots) = sort(filter(!=(0), slots); by=id -> runs[id].value)
 
@@ -113,7 +115,7 @@ end
 function _sample_sh_inner(s::DEHB, candidates, runs, r::Int, parents)
     de = s.inner
 
-    occupant = de.subpops[r][_slot(s, runs, r, length(runs) + 1)]
+    occupant = de.subpops[r][_next_slot(s, r)]
     target = occupant == 0 ? rand(de.rng, length(candidates)) : runs[occupant].unit_params
     i = findfirst(==(target), parents)
     if i !== nothing && length(parents) > 1
@@ -128,10 +130,17 @@ function _sample_sh_inner(s::DEHB, candidates, runs, r::Int, parents)
     return _de_trial(de, target, parents)
 end
 
+function _create_inner!(de::DEHBSampler, s, entry)
+    r = entry.params.r
+    entry.metadata[:slot] = _next_slot(s, r)
+    de.total_dispatched[r] += 1
+    return nothing
+end
+
 function _tell_inner!(de::DEHBSampler, s, runs, entry)
     if entry.status === Completed
         r = entry.params.r
-        slot = _slot(s, runs, r, entry.id)
+        slot = entry.metadata[:slot]
         occupant = de.subpops[r][slot]
         if occupant == 0 || entry.value <= runs[occupant].value
             de.subpops[r][slot] = entry.id
