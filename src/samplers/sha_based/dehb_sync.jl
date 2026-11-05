@@ -34,8 +34,9 @@ leaves open taken from the reference implementation (https://github.com/automl/D
 The first rung of the first bracket is drawn uniformly at random, and every other first-rung 
 trial is evolved from its own level's subpopulation, with a random target standing in 
 for a slot that is still empty. In the first iteration, later rungs promote the best configurations 
-from the level below unchanged, so a `Stateful` objective receives their `pre_artefact`; 
-in later iterations every trial is evolved from the level below and trains from scratch.
+from the level below unchanged; in later iterations every trial is evolved from the level below. 
+Every trial trains from scratch: a `Stateful` objective never receives a `pre_artefact` 
+and only has its `post_artefact` recorded.
 """
 const DEHB = SuccessiveHalving{true,<:DEHBSampler}
 
