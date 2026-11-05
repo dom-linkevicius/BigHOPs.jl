@@ -68,14 +68,14 @@ end
     de = s.inner
     de.subpops[1][[5, 2, 9]] = [1, 2, 3]
 
-    @test BigHOPs._members(s, runs, 1, 2, 2) == [[0.2, 0.2], [0.3, 0.3]]
-    padded = BigHOPs._members(s, runs, 1, 4, 2)
+    @test BigHOPs._members(s, runs, 1, 2) == [[0.2, 0.2], [0.3, 0.3]]
+    padded = BigHOPs._members(s, runs, 1, 4)
     @test padded[1:3] == [[0.2, 0.2], [0.3, 0.3], [0.1, 0.1]]
     @test length(padded) == 4 && all(0 .<= padded[4] .<= 1)
-    @test length(BigHOPs._members(s, runs, 27, 1, 2)) == 1
+    @test length(BigHOPs._members(s, runs, 27, 1)) == 1
 
     for _ in 1:20
-        trial = BigHOPs._sample_sh_inner(s, (a=Continuous(0, 1), b=Continuous(0, 1)), runs, 27, BigHOPs._members(s, runs, 27, 1, 2))
+        trial = BigHOPs._sample_sh_inner(s, (a=Continuous(0, 1), b=Continuous(0, 1)), runs, 27, BigHOPs._members(s, runs, 27, 1))
         @test length(trial) == 2
         @test all(0 .<= trial .<= 1)
     end

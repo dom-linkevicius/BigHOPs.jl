@@ -56,16 +56,16 @@ end
 
 _ranked(runs, ids) = ids[sortperm([runs[id].value for id in ids])]
 
-function _members(s::DEHB, runs, r::Int, n::Int, d::Int)
+function _members(s::DEHB, runs, r::Int, n::Int)
     ranked = _ranked(runs, filter(!=(0), s.inner.subpops[r]))
     members = Vector{Float64}[runs[id].unit_params for id in ranked[1:min(n, end)]]
-    return append!(members, [rand(s.inner.rng, d) for _ in 1:(n-length(members))])
+    return append!(members, [rand(s.inner.rng, length(first(runs).unit_params)) for _ in 1:(n-length(members))])
 end
 
-function _global_pool(s::DEHB, runs, d::Int)
+function _global_pool(s::DEHB, runs)
     pool = Vector{Vector{Float64}}()
     for slots in values(s.inner.subpops)
-        append!(pool, Vector{Float64}[id == 0 ? rand(s.inner.rng, d) : runs[id].unit_params for id in slots])
+        append!(pool, Vector{Float64}[id == 0 ? rand(s.inner.rng, length(first(runs).unit_params)) : runs[id].unit_params for id in slots])
     end
     return pool
 end
@@ -115,19 +115,19 @@ function _sample_sh_inner(s::DEHB, candidates, runs, d::SHDecision{:draw})
     r = d.rung.resource
     _init_bracket(d.bracket) && return rand(s.inner.rng, length(candidates))
     return _sample_sh_inner(s, candidates, runs, r,
-                            _members(s, runs, r, d.rung.capacity, length(candidates)))
+                            _members(s, runs, r, d.rung.capacity))
 end
 
 function _sample_sh_inner(s::DEHB, candidates, runs, d::SHDecision{:promote})
     r = d.bracket.rungs[d.rung.rung+1].resource
-    return _sample_sh_inner(s, candidates, runs, r, _members(s, runs, d.rung.resource, d.bracket.rungs[d.rung.rung+1].capacity, length(candidates)))
+    return _sample_sh_inner(s, candidates, runs, r, _members(s, runs, d.rung.resource, d.bracket.rungs[d.rung.rung+1].capacity))
 end
 
 function _sample_sh_inner(s::DEHB, candidates, runs, r::Int, parents)
     de = s.inner
 
     occupant = de.subpops[r][_next_slot(s, runs, r)]
-    pool = _global_pool(s, runs, length(candidates))
+    pool = _global_pool(s, runs)
 
     target = occupant == 0 ? rand(de.rng, length(candidates)) : runs[occupant].unit_params
     append!(parents, rand(de.rng, pool, max(0, 3 - length(parents))))
