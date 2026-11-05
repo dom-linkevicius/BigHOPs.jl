@@ -160,12 +160,11 @@ end
         end
         save_hyperoptimizer(ho, path)
         @test ho.n_pending == 2
-        @test BigHOPs.blocked(ho.sampler, ho)
+        @test BigHOPs._bracket_decision(ho.sampler, first(ho.sampler.active_brackets), ho.runs) isa BigHOPs.SHDecision{:wait}
 
         loaded = @test_logs (:warn, r"still in flight") match_mode = :any load_hyperoptimizer(Stateful(toy), path)
         @test loaded.n_pending == 0
         @test count(e -> e.status === BigHOPs.Abandoned, loaded.runs) == 2
-        @test !BigHOPs.blocked(loaded.sampler, loaded)
 
         run!(loaded; executor=Serial())
         @test loaded.status == BigHOPs.Finished
