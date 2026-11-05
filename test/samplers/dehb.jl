@@ -139,14 +139,23 @@ end
     for _ in 1:50
         @test all(0 .<= BigHOPs._de_trial(wide, [0.99, 0.01], [[0.99, 0.01], [0.01, 0.99], [0.5, 0.5]]) .<= 1)
     end
+end
 
-    others = [fill(0.3, 4), fill(0.4, 4), fill(0.6, 4)]
+@testset "DEHB leaves the target out of its mutation parents" begin
+    @info "Testing that DEHB drops the target from the parents before topping them up, unless it is the only parent"
+
+    candidates = (a=Continuous(0, 1), b=Continuous(0, 1))
+    s = BigHOPs.init(DEHB(R=27, η=3, r_min=1, F=0.5, crossover=1.0, rng=StableRNG(11)), candidates, 10)
+    target = [0.9, 0.9]
+    runs = [BigHOPs._with_result(BigHOPs.RunEntry(1, (r=27, a=0.0), target, Dict{Symbol,Any}()), BigHOPs.Completed, 1.0, nothing)]
+    s.inner.subpops[27][2] = 1
+    others = [fill(0.3, 2), fill(0.4, 2), fill(0.6, 2)]
     possible = [a .+ 0.5 .* (b .- c) for a in others, b in others, c in others if a != b && b != c && a != c]
-    all_from_mutant = BigHOPs.DEHBSampler(; F=0.5, crossover=1.0, rng=StableRNG(11))
+
     for _ in 1:20
-        @test BigHOPs._de_trial(all_from_mutant, target, vcat([target], others)) in possible
+        @test BigHOPs._sample_sh_inner(s, candidates, runs, 27, vcat([copy(target)], others)) in possible
     end
-    @test length(BigHOPs._de_trial(all_from_mutant, target, [target, others[1]])) == length(target)
+    @test length(BigHOPs._sample_sh_inner(s, candidates, runs, 27, [copy(target)])) == 2
 end
 
 @testset "DEHB warns only on a Stateful objective" begin

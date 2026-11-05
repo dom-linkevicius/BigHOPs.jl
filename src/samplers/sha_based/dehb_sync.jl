@@ -60,11 +60,6 @@ function _members(s::DEHB, runs, r::Int, n::Int)
 end
 
 function _de_trial(s::DEHBSampler, target::Vector{Float64}, parents::Vector{Vector{Float64}})
-    i = findfirst(==(target), parents)
-    if i !== nothing && length(parents) > 1
-        parents = deleteat!(copy(parents), i)
-    end
-    parents = vcat(parents, [rand(s.rng, length(target)) for _ in 1:(3-length(parents))])
     r1, r2, r3 = parents[randperm(s.rng, length(parents))[1:3]]
     mutant = r1 .+ s.F .* (r2 .- r3)
     out_of_range = .!(0 .<= mutant .<= 1)
@@ -112,6 +107,10 @@ function _sample_sh_inner(s::DEHB, candidates, runs, r::Int, parents)
 
     occupant = de.subpops[r][_next_slot(s, runs, r)]
     target = occupant == 0 ? rand(de.rng, length(candidates)) : runs[occupant].unit_params
+    i = findfirst(==(target), parents)
+    if i !== nothing && length(parents) > 1
+        deleteat!(parents, i)
+    end
     if length(parents) < 3
         global_pool = reduce(vcat, values(de.subpops))
         for id in rand(de.rng, global_pool, 3 - length(parents))
