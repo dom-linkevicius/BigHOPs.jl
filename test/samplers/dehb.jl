@@ -75,7 +75,7 @@ end
     @test length(BigHOPs._members(s, runs, 27, 1, 2)) == 1
 
     for _ in 1:20
-        trial = BigHOPs._evolve(s, runs, 2, 27, 27, 1)
+        trial = BigHOPs._sample_sh_inner(s, (a=Continuous(0, 1), b=Continuous(0, 1)), runs, 27, BigHOPs._members(s, runs, 27, 1, 2))
         @test length(trial) == 2
         @test all(0 .<= trial .<= 1)
     end

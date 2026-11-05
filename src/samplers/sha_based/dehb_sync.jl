@@ -107,27 +107,28 @@ function _entry_for(d::SHDecision{:promote}, s::DEHB, ho, id, params, unit_param
     return RunEntry(id, _add_r(params, target.resource), unit_params, _metadata(d.bracket, target.rung))
 end
 
-function _evolve(s::DEHB, runs, d::Int, r::Int, r_parents::Int, n::Int)
-    de = s.inner
-    occupant = de.subpops[r][_next_slot(s, runs, r)]
-    target = occupant == 0 ? rand(de.rng, d) : runs[occupant].unit_params
-    parents = _members(s, runs, r_parents, n, d)
-    if length(parents) < 3
-        everyone = reduce(vcat, (_members(s, runs, level, length(slots), d) for (level, slots) in sort(collect(de.subpops))))
-        append!(parents, [_mutant(de, target, everyone) for _ in 1:(4-length(parents))])
-    end
-    return _de_trial(de, target, parents)
-end
-
 function _sample_sh_inner(s::DEHB, candidates, runs, d::SHDecision{:draw})
     r = d.rung.resource
     _init_bracket(d.bracket) && return rand(s.inner.rng, length(candidates))
-    return _evolve(s, runs, length(candidates), r, r, d.rung.capacity)
+    return _sample_sh_inner(s, candidates, runs, r,
+                            _members(s, runs, r, d.rung.capacity, length(candidates)))
 end
 
 function _sample_sh_inner(s::DEHB, candidates, runs, d::SHDecision{:promote})
     r = d.bracket.rungs[d.rung.rung+1].resource
-    return _evolve(s, runs, length(candidates), r, d.rung.resource, d.bracket.rungs[d.rung.rung+1].capacity)
+    return _sample_sh_inner(s, candidates, runs, r, _members(s, runs, d.rung.resource, d.bracket.rungs[d.rung.rung+1].capacity, length(candidates)))
+end
+
+function _sample_sh_inner(s::DEHB, candidates, runs, r::Int, parents)
+    de = s.inner
+
+    occupant = de.subpops[r][_next_slot(s, runs, r)]
+    target = occupant == 0 ? rand(de.rng, length(candidates)) : runs[occupant].unit_params
+    if length(parents) < 3
+        pool = reduce(vcat, (_members(s, runs, level, length(slots), length(candidates)) for (level, slots) in sort(collect(de.subpops))))
+        append!(parents, [_mutant(de, target, pool) for _ in 1:(4-length(parents))])
+    end
+    return _de_trial(de, target, parents)
 end
 
 function create_run_entry(s::DEHB, ho, id, params, unit_params)
