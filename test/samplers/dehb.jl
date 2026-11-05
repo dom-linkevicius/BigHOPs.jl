@@ -140,13 +140,13 @@ end
         @test all(0 .<= BigHOPs._de_trial(wide, [0.99, 0.01], [[0.99, 0.01], [0.01, 0.99], [0.5, 0.5]]) .<= 1)
     end
 
-    others = parents
+    others = [fill(0.3, 4), fill(0.4, 4), fill(0.6, 4)]
     possible = [a .+ 0.5 .* (b .- c) for a in others, b in others, c in others if a != b && b != c && a != c]
-    de = BigHOPs.DEHBSampler(; F=0.5, rng=StableRNG(11))
+    all_from_mutant = BigHOPs.DEHBSampler(; F=0.5, crossover=1.0, rng=StableRNG(11))
     for _ in 1:20
-        @test BigHOPs._mutant(de, target, vcat([target], others)) in possible
+        @test BigHOPs._de_trial(all_from_mutant, target, vcat([target], others)) in possible
     end
-    @test length(BigHOPs._mutant(de, target, [target, others[1]])) == length(target)
+    @test length(BigHOPs._de_trial(all_from_mutant, target, [target, others[1]])) == length(target)
 end
 
 @testset "DEHB warns only on a Stateful objective" begin

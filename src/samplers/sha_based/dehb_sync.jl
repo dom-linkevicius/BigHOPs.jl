@@ -62,19 +62,23 @@ function _members(s::DEHB, runs, r::Int, n::Int, d::Int)
     return append!(members, [rand(s.inner.rng, d) for _ in 1:(n-length(members))])
 end
 
-function _mutant(s::DEHBSampler, target::Vector{Float64}, parents::Vector{Vector{Float64}})
-    parents = copy(parents)
-    i = findfirst(==(target), parents)
-    if i !== nothing && length(parents) > 1
-        deleteat!(parents, i)
+function _global_pool(s::DEHB, runs, d::Int)
+    pool = Vector{Vector{Float64}}()
+    for slots in values(s.inner.subpops)
+        append!(pool, Vector{Float64}[id == 0 ? rand(s.inner.rng, d) : runs[id].unit_params for id in slots])
     end
-    append!(parents, [rand(s.rng, length(target)) for _ in 1:(3-length(parents))])
-    r1, r2, r3 = parents[randperm(s.rng, length(parents))[1:3]]
-    return r1 .+ s.F .* (r2 .- r3)
+    return pool
 end
 
 function _de_trial(s::DEHBSampler, target::Vector{Float64}, parents::Vector{Vector{Float64}})
-    mutant = _mutant(s, target, parents)
+    i = findfirst(==(target), parents)
+    if i !== nothing && length(parents) > 1
+        parents = deleteat!(copy(parents), i)
+    end
+    parents = vcat(parents, [rand(s.rng, length(target)) for _ in 1:(3-length(parents))])
+    r1, r2, r3 = parents[randperm(s.rng, length(parents))[1:3]]
+    mutant = r1 .+ s.F .* (r2 .- r3)
+
     cross = rand(s.rng, length(target)) .< s.crossover
     if !any(cross)
         cross[rand(s.rng, eachindex(target))] = true
@@ -123,11 +127,10 @@ function _sample_sh_inner(s::DEHB, candidates, runs, r::Int, parents)
     de = s.inner
 
     occupant = de.subpops[r][_next_slot(s, runs, r)]
+    pool = _global_pool(s, runs, length(candidates))
+
     target = occupant == 0 ? rand(de.rng, length(candidates)) : runs[occupant].unit_params
-    if length(parents) < 3
-        pool = reduce(vcat, (_members(s, runs, level, length(slots), length(candidates)) for (level, slots) in sort(collect(de.subpops))))
-        append!(parents, [_mutant(de, target, pool) for _ in 1:(4-length(parents))])
-    end
+    append!(parents, rand(de.rng, pool, max(0, 3 - length(parents))))
     return _de_trial(de, target, parents)
 end
 
