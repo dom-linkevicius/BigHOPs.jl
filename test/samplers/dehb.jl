@@ -32,8 +32,8 @@ end
     @test ho.sampler.inner isa BigHOPs.DEHBSampler
 end
 
-@testset "DEHB subpopulations are keyed by resource and start empty" begin
-    @info "Testing that DEHB allocates one empty subpopulation per resource level, sized by the largest rung at that level"
+@testset "DEHB subpopulations are keyed by resource" begin
+    @info "Testing that DEHB allocates one subpopulation per resource level, sized by that bracket's first rung"
 
     s = DEHB(R=27, η=3, r_min=1)
     de = BigHOPs._subpopulations!(s)

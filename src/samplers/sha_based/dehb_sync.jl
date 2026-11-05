@@ -38,19 +38,14 @@ SuccessiveHalving{true,<:DEHBSampler}(; R::Int, η::Int=3, r_min::Int=1, iterati
 
 _check_objective(s::DEHB, objective) = objective isa Stateful && @warn "$(typeof(s)) with a Stateful objective: pre_artefact is only set on promotions in the first iteration; every other trial trains from scratch. post_artefact is recorded either way"
 
-function _subpop_size(s::DEHB, r::Int)
-    smax = _smax(s.R, s.r_min, s.η)
-    return maximum(_capacity(s.R, s.r_min, s.η, bracket, rung)
-                   for bracket in 1:(smax+1) for rung in 1:_n_rungs(s.R, s.r_min, s.η, bracket)
-                   if _resource(s.R, s.r_min, s.η, bracket, rung) == r)
-end
+_subpop_size(s::DEHB, bracket::Int) = _capacity(s.R, s.r_min, s.η, bracket, 1)
 
 function _subpopulations!(s::DEHB)
     de = s.inner
     isempty(de.subpops) || return de
     for bracket in 1:(_smax(s.R, s.r_min, s.η)+1)
         r = _resource(s.R, s.r_min, s.η, bracket, 1)
-        de.subpops[r] = zeros(Int, _subpop_size(s, r))
+        de.subpops[r] = zeros(Int, _subpop_size(s, bracket))
     end
     return de
 end
