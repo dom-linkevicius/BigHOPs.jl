@@ -4,3 +4,4 @@
 Manifest.toml
 *.log
 benchmarks/counting_ones_results/
+benchmarks/nn_results/

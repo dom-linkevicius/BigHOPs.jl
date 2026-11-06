@@ -41,22 +41,26 @@ end
     @test sort(collect(keys(de.subpops))) == [1, 3, 9, 27]
     @test [length(de.subpops[r]) for r in (1, 3, 9, 27)] == [27, 12, 6, 4]
     @test all(slots -> all(==(0), slots), values(de.subpops))
+    @test sort(collect(keys(de.total_dispatched))) == [1, 3, 9, 27]
+    @test all(==(0), values(de.total_dispatched))
 
     @test BigHOPs.init(s, (a=Continuous(0, 1),), 10).inner.subpops !== de.subpops
     @test length(de.subpops) == 4
 end
 
 @testset "DEHB rolling slot pointer wraps within a subpopulation" begin
-    @info "Testing that DEHB's target pointer counts the earlier trials at a resource level and wraps at the subpopulation's end"
+    @info "Testing that DEHB's target pointer walks a subpopulation and resets at its end"
 
     s = BigHOPs.init(DEHB(R=27, η=3, r_min=1), (a=Continuous(0, 1),), 10)
-    at(r, n) = [BigHOPs.RunEntry(i, (r=r, a=0.0), [0.5]) for i in 1:n]
+    de = s.inner
 
-    @test BigHOPs._slot(s, BigHOPs.RunEntry[], 3, 1) == 1
-    @test BigHOPs._slot(s, at(3, 11), 3, 12) == 12
-    @test BigHOPs._slot(s, at(3, 12), 3, 13) == 1
-    @test BigHOPs._slot(s, [at(3, 13); at(1, 5)], 3, 14) == 2
-    @test BigHOPs._slot(s, at(3, 11), 3, 5) == 5
+    @test BigHOPs._next_slot(s, 3) == 1
+    de.total_dispatched[3] = 11
+    @test BigHOPs._next_slot(s, 3) == 12
+    de.total_dispatched[3] = 12
+    @test BigHOPs._next_slot(s, 3) == 1
+    de.total_dispatched[3] = 13
+    @test BigHOPs._next_slot(s, 3) == 2
 end
 
 @testset "DEHB mutation parents are the best members of a subpopulation" begin
@@ -148,7 +152,7 @@ end
     s = BigHOPs.init(DEHB(R=27, η=3, r_min=1, F=0.5, crossover=1.0, rng=StableRNG(11)), candidates, 10)
     target = [0.9, 0.9]
     runs = [BigHOPs._with_result(BigHOPs.RunEntry(1, (r=27, a=0.0), target, Dict{Symbol,Any}()), BigHOPs.Completed, 1.0, nothing)]
-    s.inner.subpops[27][2] = 1
+    s.inner.subpops[27][1] = 1
     others = [fill(0.3, 2), fill(0.4, 2), fill(0.6, 2)]
     possible = [a .+ 0.5 .* (b .- c) for a in others, b in others, c in others if a != b && b != c && a != c]
 
@@ -189,7 +193,8 @@ end
 
     de = ho.sampler.inner
     for r in (1, 3, 9, 27)
-        @test [BigHOPs._slot(ho.sampler, ho.runs, r, e.id) for e in ho.runs if e.params.r == r] == [mod(i - 1, length(de.subpops[r])) + 1 for i in 1:count(e -> e.params.r == r, ho.runs)]
+        @test de.total_dispatched[r] == count(e -> e.params.r == r, ho.runs)
+        @test [e.metadata[:slot] for e in ho.runs if e.params.r == r] == [mod(i - 1, length(de.subpops[r])) + 1 for i in 1:count(e -> e.params.r == r, ho.runs)]
         @test all(id -> 1 <= id <= ho.n, filter(!=(0), de.subpops[r]))
     end
 
@@ -212,10 +217,10 @@ end
         entry = ho.runs[id]
         @test entry.status == BigHOPs.Completed
         @test entry.params.r == r
-        @test BigHOPs._slot(ho.sampler, ho.runs, r, entry.id) == slot
+        @test entry.metadata[:slot] == slot
 
         rivals = [e for e in ho.runs
-                  if e.status == BigHOPs.Completed && e.params.r == r && BigHOPs._slot(ho.sampler, ho.runs, r, e.id) == slot]
+                  if e.status == BigHOPs.Completed && e.params.r == r && e.metadata[:slot] == slot]
         @test entry.value == minimum(e.value for e in rivals)
         n_checked += 1
     end
@@ -231,7 +236,7 @@ end
     de = ho.sampler.inner
     for (r, ids) in de.subpops, (slot, id) in enumerate(ids)
         id == 0 && continue
-        @test id == maximum(e.id for e in ho.runs if e.params.r == r && BigHOPs._slot(ho.sampler, ho.runs, r, e.id) == slot)
+        @test id == maximum(e.id for e in ho.runs if e.params.r == r && e.metadata[:slot] == slot)
     end
 end
 
@@ -318,6 +323,6 @@ end
 
     de = ho.sampler.inner
     for r in keys(de.subpops)
-        @test [BigHOPs._slot(ho.sampler, ho.runs, r, e.id) for e in ho.runs if e.params.r == r] == [mod(i - 1, length(de.subpops[r])) + 1 for i in 1:count(e -> e.params.r == r, ho.runs)]
+        @test [e.metadata[:slot] for e in ho.runs if e.params.r == r] == [mod(i - 1, length(de.subpops[r])) + 1 for i in 1:count(e -> e.params.r == r, ho.runs)]
     end
 end

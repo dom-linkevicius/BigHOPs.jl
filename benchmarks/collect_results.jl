@@ -5,7 +5,9 @@ include("nn_objective.jl")
 
 _log(msg) = (println(msg); flush(stdout))
 
-const RESULTS_PATH = joinpath(@__DIR__, "results.jld2")
+const RESULTS_DIR = joinpath(@__DIR__, "nn_results")
+
+results_path(name, ex_name) = joinpath(RESULTS_DIR, "$(name)_$(ex_name).jld2")
 
 const CANDIDATES = (
     lr=Continuous(-5, -1; transform=x -> 10.0^x),
@@ -18,7 +20,7 @@ const CANDIDATES = (
 const ETA = 3
 
 const N_TRIALS = DEPLOY ? BigHOPs._total_draws(R_MAX, R_MIN, ETA) : 4
-const REGRET_REPEATS = parse(Int, get(ENV, "BIGHO_BENCHMARK_REPEATS", DEPLOY ? "10" : "2"))
+const REGRET_REPEATS = parse(Int, get(ENV, "BIGHO_BENCHMARK_REPEATS", DEPLOY ? "20" : "2"))
 
 if DEPLOY
     smax = BigHOPs._smax(R_MAX, R_MIN, ETA)
@@ -35,7 +37,7 @@ end
 const PLAIN_OBJ = Stateful(nn_objective)
 const SH_OBJ = Stateful(nn_objective_stateful)
 
-const SAMPLER_NAMES = ("Random", "LHS", "Hyperband", "ASHA", "DEHB")
+const SAMPLER_NAMES = ("Random", "LHS", "Hyperband", "ASHA", "DEHB", "Sobol")
 const EXECUTORS = (Serial=Serial(), Threaded=Threaded())
 
 const SHA_INNER = RandomSampler()
@@ -43,6 +45,7 @@ const SHA_INNER = RandomSampler()
 const MAKE_HYPEROPTIMIZER = Dict(
     "Random" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=RandomSampler(), n=N_TRIALS),
     "LHS" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=LHSampler(), n=N_TRIALS),
+    "Sobol" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=SobolSampler(), n=N_TRIALS),
     "Hyperband" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, Hyperband(R=R_MAX, η=ETA, r_min=R_MIN, inner=SHA_INNER)),
     "ASHA" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, ASHA(R=R_MAX, η=ETA, r_min=R_MIN, inner=SHA_INNER)),
     "DEHB" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, DEHB(R=R_MAX, η=ETA, r_min=R_MIN)),
@@ -51,7 +54,7 @@ const MAKE_HYPEROPTIMIZER = Dict(
 _log("Warming up (JIT compilation)...")
 const WARMUP_OBJ = Stateful(_warmup_objective)
 const WARMUP_SH_OBJ = Stateful(_warmup_objective_stateful)
-for executor in EXECUTORS, sampler in (RandomSampler(), LHSampler())
+for executor in EXECUTORS, sampler in (RandomSampler(), LHSampler(), SobolSampler())
     run!(Hyperoptimizer(WARMUP_OBJ, CANDIDATES; sampler=sampler, n=2); executor=executor, show_progress=false)
 end
 for sh_sampler in (Hyperband(R=1, η=3, r_min=1), ASHA(R=1, η=3, r_min=1), DEHB(R=3, η=3, r_min=1))
@@ -76,12 +79,19 @@ function _running_min_curve(pairs)
 end
 
 function collect_results()
-    runs = Dict((name, ex) => Tuple{Vector{Float64},Vector{Float64}}[] for name in SAMPLER_NAMES, ex in keys(EXECUTORS))
+    mkpath(RESULTS_DIR)
+    metadata = (n_trials=N_TRIALS, r_max=R_MAX, deploy=DEPLOY, nthreads=Threads.nthreads(),
+                sha_inner_sampler=nameof(typeof(SHA_INNER)))
     total_combos = REGRET_REPEATS * length(EXECUTORS) * length(SAMPLER_NAMES)
     combo = 0
 
     for repeat in 1:REGRET_REPEATS, ex_name in keys(EXECUTORS), name in SAMPLER_NAMES
         combo += 1
+        path = results_path(name, ex_name)
+        if !isfile(path)
+            JLD2.jldsave(path; metadata)
+        end
+        JLD2.jldopen(file -> haskey(file, "repeat_$repeat"), path, "r") && continue
         _log("[$combo/$total_combos] repeat=$repeat sampler=$name executor=$ex_name -- starting")
         ho = MAKE_HYPEROPTIMIZER[name]()
         t0 = time()
@@ -90,15 +100,12 @@ function collect_results()
         elapsed = time() - t0
         best = isempty(pairs) ? NaN : minimum(last, pairs)
         _log("[$combo/$total_combos] repeat=$repeat sampler=$name executor=$ex_name -- done elapsed=$elapsed best=$best")
-        push!(runs[(name, ex_name)], _running_min_curve(pairs))
+        JLD2.jldopen(path, "a+") do file
+            file["repeat_$repeat"] = _running_min_curve(pairs)
+        end
     end
-
-    metadata = (regret_repeats=REGRET_REPEATS, n_trials=N_TRIALS, r_max=R_MAX,
-                deploy=DEPLOY, nthreads=Threads.nthreads(), sha_inner_sampler=nameof(typeof(SHA_INNER)))
-    JLD2.save(RESULTS_PATH, "runs", runs, "metadata", metadata)
-    return runs, metadata
 end
 
 _log("Collecting wall-clock regret comparison results...")
 collect_results()
-_log("Results written to $RESULTS_PATH")
+_log("Results written to $RESULTS_DIR")
