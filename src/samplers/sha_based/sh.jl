@@ -178,9 +178,12 @@ _check_objective(s::SuccessiveHalving, objective) = objective isa Stateful || ob
                                                              "resume from a previous trial's state, so each promotion re-pays all the resource already spent on it -- " *
                                                              "wrap the objective in `Stateful` to make promotions continue instead of restart"
 
+_create_inner!(::Sampler, s, entry) = nothing
+
 function create_run_entry(s::SuccessiveHalving, ho, id, params, unit_params)
     decision = _manage_decide!(s, ho.runs)
     entry = _entry_for(decision, s, ho, id, params, unit_params)
     _record!(decision, id)
+    _create_inner!(s.inner, s, entry)
     return entry
 end
