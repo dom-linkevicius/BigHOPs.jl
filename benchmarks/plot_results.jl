@@ -53,8 +53,7 @@ function plot_results(runs, metadata)
         end
         regret = [any(isnan, col) ? NaN : max(median(col) - global_best, 1e-4) for col in eachcol(curves_on_grid)]
         lower = [any(isnan, col) ? NaN : max(quantile(col, 0.25) - global_best, 1e-4) for col in eachcol(curves_on_grid)]
-        upper = [any(isnan, col) ? NaN : max(quantile(col, 0.75) - global_best, 1e-4) for col in eachcol(curves_on_grid)]
-        computed[(name, ex_name)] = (; grid, regret, lower, upper)
+        computed[(name, ex_name)] = (; grid, regret)
         finite_lower = filter(!isnan, lower)
         isempty(finite_lower) || (ymin = min(ymin, minimum(finite_lower)))
     end
@@ -73,14 +72,13 @@ function plot_results(runs, metadata)
             color = SAMPLER_COLORS[name]
             label_name = name in SHA_SAMPLER_NAMES ? "$name/$(metadata.sha_inner_sampler)" : name
             lines!(ax, c.grid, c.regret; label=label_name, color=color)
-            band!(ax, c.grid, c.lower, c.upper; color=(color, 0.15))
         end
         xlims!(ax, X_LOWER_LIMIT, X_UPPER_LIMIT)
         ylims!(ax, ymin, Y_UPPER_LIMIT)
         legend_source = ax
     end
     Label(fig[1:2, 0], "regret (best validation loss - global best)"; rotation=pi / 2, tellheight=false)
-    Legend(fig[0, 1], legend_source; orientation=:horizontal, nbanks=1)
+    Legend(fig[0, 1], legend_source; orientation=:horizontal, nbanks=2)
     save(joinpath(OUTDIR, "wallclock_regret_comparison.png"), fig)
 end
 
