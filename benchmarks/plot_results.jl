@@ -2,12 +2,15 @@ using CairoMakie
 using JLD2
 using Statistics: median, quantile
 
-const RESULTS_PATH = joinpath(@__DIR__, "results.jld2")
+const RESULTS_DIR = joinpath(@__DIR__, "nn_results")
+
+results_path(name, ex_name) = joinpath(RESULTS_DIR, "$(name)_$(ex_name).jld2")
+
 const OUTDIR = joinpath(@__DIR__, "..", "docs", "benchmarks")
 mkpath(OUTDIR)
 
 const REGRET_GRID_POINTS = 40
-const SAMPLER_NAMES = ("Random", "LHS", "Hyperband", "ASHA", "DEHB")
+const SAMPLER_NAMES = ("Random", "LHS", "Hyperband", "ASHA", "DEHB", "Sobol")
 const SAMPLER_COLORS = Dict(zip(SAMPLER_NAMES, Makie.wong_colors()))
 const SHA_SAMPLER_NAMES = ("Hyperband", "ASHA")
 const Y_UPPER_LIMIT = 0.11
@@ -31,13 +34,15 @@ function _resample_to_grid(times, running_min, grid)
 end
 
 function plot_results(runs, metadata)
-    regret_repeats = metadata.regret_repeats
+    fewest, most = extrema(length, values(runs))
+    regret_repeats = fewest == most ? fewest : "$(fewest)–$(most)"
     all_values = Float64[e for curves in values(runs) for (_, best) in curves for e in best]
     global_best = minimum(all_values)
 
     computed = Dict{Tuple{String,Symbol},NamedTuple}()
     ymin = Inf
     for name in SAMPLER_NAMES, ex_name in (:Serial, :Threaded)
+        haskey(runs, (name, ex_name)) || continue
         curves = runs[(name, ex_name)]
         own_min = minimum(times[1] for (times, _) in curves if !isempty(times))
         own_max = maximum(times[end] for (times, _) in curves if !isempty(times))
@@ -63,6 +68,7 @@ function plot_results(runs, metadata)
                   yminorticksvisible=true, yminorgridvisible=true, yminorticks=IntervalsBetween(9),
                   title="Wall-clock regret comparison -- $title_word ($regret_repeats repeats/combo, $(metadata.nthreads) threads)")
         for name in SAMPLER_NAMES
+            haskey(computed, (name, ex_name)) || continue
             c = computed[(name, ex_name)]
             color = SAMPLER_COLORS[name]
             label_name = name in SHA_SAMPLER_NAMES ? "$name/$(metadata.sha_inner_sampler)" : name
@@ -78,7 +84,22 @@ function plot_results(runs, metadata)
     save(joinpath(OUTDIR, "wallclock_regret_comparison.png"), fig)
 end
 
-@info "Loading results from $RESULTS_PATH..."
-runs, metadata = JLD2.load(RESULTS_PATH, "runs", "metadata")
+function load_runs()
+    runs = Dict{Tuple{String,Symbol},Vector{Tuple{Vector{Float64},Vector{Float64}}}}()
+    metadata = nothing
+    for name in SAMPLER_NAMES, ex_name in (:Serial, :Threaded)
+        isfile(results_path(name, ex_name)) || continue
+        JLD2.jldopen(results_path(name, ex_name), "r") do file
+            repeat_keys = sort(filter(startswith("repeat_"), collect(keys(file))); by=k -> parse(Int, k[8:end]))
+            isempty(repeat_keys) && return
+            metadata = file["metadata"]
+            runs[(name, ex_name)] = [file[k] for k in repeat_keys]
+        end
+    end
+    return runs, metadata
+end
+
+@info "Loading results from $RESULTS_DIR..."
+runs, metadata = load_runs()
 plot_results(runs, metadata)
 @info "Plot written to $OUTDIR"
