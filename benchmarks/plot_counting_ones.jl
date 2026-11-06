@@ -4,11 +4,13 @@ using Statistics: mean, std
 
 const RESULTS_DIR = joinpath(@__DIR__, "counting_ones_results")
 const OUTDIR = joinpath(@__DIR__, "..", "docs", "benchmarks")
-const SAMPLER_COLORS = Dict("Random" => Makie.wong_colors()[1], "Hyperband" => Makie.wong_colors()[3], "DEHB" => Makie.wong_colors()[2])
+const SAMPLER_COLORS = Dict("Random" => Makie.wong_colors()[1], "Hyperband" => Makie.wong_colors()[3], "DEHB" => Makie.wong_colors()[2], "GP" => Makie.wong_colors()[4])
 
 const PLOTS = (
-    (ncat=32, ncont=32, samplers=("Random", "Hyperband", "DEHB"), xlims=(0.015, 1e6), ylims=(0.015, 0.5)),
-    (ncat=8, ncont=8, samplers=("Random", "Hyperband", "DEHB"), xlims=(1e-1, 1e4), ylims=(1e-3, 1e0)),
+    (ncat=32, ncont=32, samplers=("Random", "Hyperband", "DEHB", "GP"), xlims=(0.015, 1e6), ylims=(0.015, 0.5),
+     labels=Dict("GP" => "GP (async Thompson Sampling)")),
+    (ncat=8, ncont=8, samplers=("Random", "Hyperband", "DEHB", "GP"), xlims=(1e-1, 1e4), ylims=(1e-3, 1e0),
+     labels=Dict("GP" => "GP (async Thompson Sampling)")),
 )
 
 const GRID = exp10.(range(-2, 6; length=160))
@@ -58,7 +60,7 @@ columnwise(f, curves) = [any(isnan, c) || f(c) <= 0 ? NaN : f(c) for c in eachco
 
 standard_error(c) = std(c) / sqrt(length(c))
 
-function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims)
+function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims, labels=Dict{String,String}())
     decades = ylims === nothing ? nothing : floor(Int, log10(ylims[1])):ceil(Int, log10(ylims[2]))
     fig = Figure(size=(750, 400))
     ax = Axis(fig[1, 1]; xlabel="cumulative budget / b_max", ylabel="normalized regret",
@@ -73,7 +75,7 @@ function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims)
         curves = load_curves(ncat, ncont, name)
         repeats = size(curves, 1)
         color = SAMPLER_COLORS[name]
-        lines!(ax, GRID, columnwise(mean, curves); label=name, color=color)
+        lines!(ax, GRID, columnwise(mean, curves); label=get(labels, name, name), color=color)
         band!(ax, GRID, columnwise(c -> mean(c) - standard_error(c), curves), columnwise(c -> mean(c) + standard_error(c), curves); color=(color, 0.15))
     end
     ax.title = "Stochastic Counting Ones, $ncat categorical + $ncont continuous ($repeats repeats)"

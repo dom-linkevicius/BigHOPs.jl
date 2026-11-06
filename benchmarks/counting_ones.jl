@@ -1,7 +1,10 @@
 using BigHOPs
+using Distributed
 using Distributions: Binomial
 using StableRNGs: StableRNG
 using JLD2
+
+include("gp_sampler.jl")
 
 const R_MIN = 9
 const R_MAX = 729
@@ -43,6 +46,8 @@ function _make(name::String, target::Float64, seed::Int, ncat::Int, ncont::Int)
     plain(p) = noisy_f(p, p.r, ncat, ncont)
     name == "Random" &&
         return Hyperoptimizer(full, candidates; sampler=RandomSampler(StableRNG(seed)), n=round(Int, target))
+    name == "GP" &&
+        return Hyperoptimizer(full, candidates; sampler=gp_sampler(StableRNG(seed)), n=round(Int, target))
     name == "Hyperband" &&
         return Hyperoptimizer(Stateful(sched), candidates,
                               Hyperband(R=R_MAX, η=ETA, r_min=R_MIN, iterations=_iterations(target),
@@ -57,6 +62,15 @@ function _trials(ho, d::Int)
             true_regret=Float32[true_regret(e.params, d) for e in told])
 end
 
+function _run_repeat(name::String, target::Float64, repeat::Int, ncat::Int, ncont::Int)
+    ho = _make(name, target, repeat, ncat, ncont)
+    elapsed = @elapsed run!(ho; executor=Serial(), show_progress=false)
+    trials = _trials(ho, ncat + ncont)
+    ho = nothing
+    GC.gc()
+    return trials, elapsed
+end
+
 function run_counting_ones(name::String, target::Float64; ncat::Int, ncont::Int, repeats::Int)
     path = results_path(ncat, ncont, name)
     mkpath(RESULTS_DIR)
@@ -68,21 +82,22 @@ function run_counting_ones(name::String, target::Float64; ncat::Int, ncont::Int,
             file["r_max"] = R_MAX
         end
     end
-    for repeat in 1:repeats
-        key = "repeat_$repeat"
-        JLD2.jldopen(file -> haskey(file, key), path, "r") && continue
-        ho = _make(name, target, repeat, ncat, ncont)
-        elapsed = @elapsed run!(ho; executor=Serial(), show_progress=false)
-        trials = _trials(ho, ncat + ncont)
-        JLD2.jldopen(path, "a+") do file
-            file[key] = trials
+    saved = JLD2.jldopen(file -> Set(keys(file)), path, "r")
+    file_lock = ReentrantLock()
+    pool = WorkerPool(workers())
+    @sync for repeat in [repeat for repeat in 1:repeats if "repeat_$repeat" ∉ saved]
+        @async begin
+            trials, elapsed = remotecall_fetch(_run_repeat, pool, name, target, repeat, ncat, ncont)
+            lock(file_lock) do
+                JLD2.jldopen(path, "a+") do file
+                    file["repeat_$repeat"] = trials
+                end
+                println("$name repeat=$repeat  $(round(elapsed; digits=1))s  trials=$(length(trials.r))  " *
+                        "budget/b_max=$(round(sum(Float64, trials.r) / R_MAX; digits=1))  " *
+                        "best measured regret=$(round((minimum(trials.value) + ncat + ncont) / (ncat + ncont); digits=5))")
+                flush(stdout)
+            end
         end
-        println("$name repeat=$repeat  $(round(elapsed; digits=1))s  trials=$(length(trials.r))  " *
-                "budget/b_max=$(round(sum(Float64, trials.r) / R_MAX; digits=1))  " *
-                "best measured regret=$(round((minimum(trials.value) + ncat + ncont) / (ncat + ncont); digits=5))")
-        flush(stdout)
-        ho = nothing
-        GC.gc()
     end
     return nothing
 end
