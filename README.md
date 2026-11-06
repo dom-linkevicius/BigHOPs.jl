@@ -125,7 +125,7 @@ The second benchmark trains a small MLP on the Titanic dataset (via `MLDatasets.
 
 The comparison is set up as "same budget, who gets there first":
 - `Hyperband`, `ASHA` and `DEHB` run their own one-pass bracket schedule (`R=1215`, `η=3`, `r_min=5`, giving 6 brackets), where one resource unit is 6 training epochs — so a bottom-rung trial trains for 30 epochs and a top-rung one for 7290.
-- That schedule tries 415 distinct hyperparameter configurations and spends ~205k epochs in total, so `RandomSampler` and `LHSampler` are given exactly the same: 415 trials, with their per-trial epoch count set so the totals match. No sampler gets more compute than another — only the choice of how to spend it differs.
+- That schedule tries 415 distinct hyperparameter configurations and spends ~205k epochs in total, so `RandomSampler`, `LHSampler` and `SobolSampler` are given exactly the same: 415 trials, with their per-trial epoch count set so the totals match. No sampler gets more compute than another — only the choice of how to spend it differs.
 - We use two different executors, `Serial` and `Threaded`, as the problem is not large enough to warrant a `DistributedQueue`.
 - Every (sampler, executor) combination is repeated 20 times; the figure shows the median across those repeats.
 
