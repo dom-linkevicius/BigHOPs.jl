@@ -133,12 +133,12 @@ The comparison is set up as "same budget, who gets there first":
 
 ![Wall-clock regret comparison](docs/benchmarks/wallclock_regret_comparison.png)
 
-What the figure shows:
+<!-- What the figure shows:
 - The successive halving-based samplers reach any given regret level sooner than the full-budget samplers at equal total budget, and they do so at every point in the run, in both executors. Cheap early rungs let them discard bad configurations before paying full price for them.
 - `LHSampler` starts better than `RandomSampler` under `Serial` since the space-filling design covers the space sooner than independent draws would. The `LHSampler` advantage vanishes once both have drawn enough configurations.
 - `Threaded` completes the same work several times faster than `Serial` (64 threads used): roughly 8x for `RandomSampler` and `LHSampler`, and roughly 3x for `Hyperband`, `ASHA` and `DEHB`. The full-budget samplers parallelize best because their trials are independent, whereas the successive-halving samplers have to resolve some trials before they can promote. `ASHA` finishes ahead of `Hyperband` under `Threaded` because it does not wait for a rung to complete fully.
 - `DEHB` is the most expensive per repeat, roughly a third slower than the other successive-halving samplers, since only its first bracket promotes configurations unchanged — every later bracket evaluates a freshly evolved configuration that has to train from scratch.
-- Unlike Counting Ones, the final regrets end up close together, within a small factor of each other. The search space here is small enough and the objective noisy enough that random draws find good configurations quickly, so the advantage of successive halving is mostly how fast it gets there rather than a much lower ceiling.
+- Unlike Counting Ones, the final regrets end up close together, within a small factor of each other. The search space here is small enough and the objective noisy enough that random draws find good configurations quickly, so the advantage of successive halving is mostly how fast it gets there rather than a much lower ceiling. -->
 
 You can find the benchmarking code in [`benchmarks/`](benchmarks/).
 
