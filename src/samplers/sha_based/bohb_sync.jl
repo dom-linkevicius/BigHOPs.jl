@@ -61,6 +61,7 @@ SuccessiveHalving{true,<:BOHBSampler}(; R::Int, η::Int=3, r_min::Int=1, iterati
 function _init_inner(inner::BOHBSampler, ::SuccessiveHalving, candidates)
     d = length(candidates)
     N_min = something(inner.N_min, d + 1)
+    # Paper leaves N_min free (d + 1 in its experiments); HpBandSter requires at least d + 1.
     N_min > d || throw(ArgumentError("N_min must be at least the number of hyperparameters plus one ($(d + 1)), got $N_min"))
     return BOHBSampler(inner.ρ, inner.q, inner.N_s, N_min, inner.b_w, inner.min_bandwidth, inner.rng,
                        Dict{Int,Vector{Int}}())
@@ -71,6 +72,7 @@ function _tell_inner!(b::BOHBSampler, s, runs, entry)
     return nothing
 end
 
+# Paper names only continuous and categorical; Ordinal is Gaussian, as integers are in HpBandSter.
 _bohb_levels(candidates) = [d isa Nominal ? length(d) : 0 for d in candidates]
 
 function _bohb_kde(b::BOHBSampler, levels, runs, ids)
@@ -78,6 +80,7 @@ function _bohb_kde(b::BOHBSampler, levels, runs, ids)
             for id in ids, (j, c) in enumerate(levels)]
     n, d = size(data)
     scott = 1.06 .* vec(std(data; dims=1, corrected=false)) .* n^(-1 / (4 + d))
+    # Paper: plain Scott's rule. Floor from HpBandSter for constant columns, cap from statsmodels' AA bound.
     cap = [c > 0 ? (c - 1) / c : Inf for c in levels]
     return (data=data, bw=max.(min.(scott, cap), b.min_bandwidth))
 end
@@ -89,7 +92,9 @@ function _bohb_model(b::BOHBSampler, levels, runs)
         N = length(ranked)
         n_good = min(N, max(b.N_min, floor(Int, b.q * N)))
         n_bad = max(b.N_min, floor(Int, (1 - b.q) * N))
+        # Paper's good and worst sets overlap for small N; HpBandSter takes bad as the next n_bad, disjoint.
         good, bad = ranked[1:n_good], ranked[(n_good+1):min(N, n_good + n_bad)]
+        # Paper fits from N_min + 2 trials; HpBandSter needs more than d in each set.
         length(good) > d && length(bad) > d &&
             return (good=_bohb_kde(b, levels, runs, good), bad=_bohb_kde(b, levels, runs, bad))
     end
@@ -102,6 +107,7 @@ function _bohb_pdf(kde, levels, x)
         k = 1.0
         for (j, c) in enumerate(levels)
             if c > 0
+                # Declared levels, not statsmodels' levels in the data, which divides by zero at one level.
                 k *= kde.data[i, j] == x[j] ? 1 - kde.bw[j] : kde.bw[j] / (c - 1)
             else
                 k *= pdf(Normal(kde.data[i, j], kde.bw[j]), x[j])
@@ -117,7 +123,9 @@ function _bohb_sample(b::BOHBSampler, kde, levels)
     x = zeros(length(levels))
     for (j, c) in enumerate(levels)
         if c == 0
+            # Paper's l′ is untruncated; HpBandSter truncates to [0, 1], the encoded range.
             x[j] = rand(b.rng, truncated(Normal(kde.data[i, j], b.b_w * kde.bw[j]), 0.0, 1.0))
+            # Paper widens every bandwidth by b_w; HpBandSter doesn't on Nominal and redraws over all levels.
         elseif rand(b.rng) < 1 - kde.bw[j]
             x[j] = kde.data[i, j]
         else
@@ -135,6 +143,7 @@ function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
     best, best_score = zeros(length(levels)), Inf
     for _ in 1:b.N_s
         x = _bohb_sample(b, model.good, levels)
+        # Paper takes l/g directly; HpBandSter floors both at 1e-32 to avoid dividing by zero.
         score = max(1e-32, _bohb_pdf(model.bad, levels, x)) / max(_bohb_pdf(model.good, levels, x), 1e-32)
         if score < best_score
             best, best_score = x, score
