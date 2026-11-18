@@ -145,14 +145,8 @@ function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
         b.stale[] = false
     end
     model = b.model[]
-    best, best_score = Float64[], Inf
-    for _ in 1:b.N_s
-        x = rand(b.rng, model.l′)
-        # Paper takes l/g directly; HpBandSter floors both at 1e-32 to avoid dividing by zero.
-        score = max(1e-32, pdf(model.g, x)) / max(pdf(model.l, x), 1e-32)
-        if score < best_score
-            best, best_score = x, score
-        end
-    end
-    return best
+    xs = rand(b.rng, model.l′, b.N_s)
+    # Paper takes l/g directly; HpBandSter floors both at 1e-32 to avoid dividing by zero.
+    scores = max.(1e-32, pdf(model.g, xs)) ./ max.(pdf(model.l, xs), 1e-32)
+    return xs[:, argmin(scores)]
 end
