@@ -90,35 +90,37 @@ end
 _fittable(N_min::Int, q::Real, d::Int, N::Int) = N - max(N_min, floor(Int, q * N)) > d
 _fittable(b::BOHBSampler, d::Int) = any(ids -> _fittable(b.N_min, b.q, d, length(ids)), values(b.observations))
 
-_bin_centre(d::Nominal, k) = (k - 0.5) / length(d)
-_bin_centres(d::Nominal) = [_bin_centre(d, k) for k in 1:length(d)]
-
 _kde_value(::Domain, u) = u
-_kde_value(d::Nominal, u) = _bin_centre(d, clamp(ceil(Int, u * length(d)), 1, length(d)))
+_kde_value(d::Nominal, u) = clamp(ceil(Int, u * length(d)), 1, length(d))
 
-_bandwidth(::Domain, h) = h
-_bandwidth(d::Nominal, h) = min(length(d) * h, (length(d) - 1) / length(d))
+_bandwidth_cap(::Domain) = Inf
+_bandwidth_cap(d::Nominal) = (length(d) - 1) / length(d)
 
 function _kde_data(b::BOHBSampler, candidates, runs, ids)
-    X = [_kde_value(c, runs[id].unit_params[j]) for (j, c) in enumerate(candidates), id in ids]
+    X = [Float64(_kde_value(c, runs[id].unit_params[j])) for (j, c) in enumerate(candidates), id in ids]
     scott = 1.06 .* vec(std(X; dims=2, corrected=false)) .* size(X, 2)^(-1 / (4 + size(X, 1)))
     # Paper: plain Scott's rule. Floor from HpBandSter for constant columns, cap from statsmodels' AA bound.
-    return X, [max(_bandwidth(c, h), b.min_bandwidth) for (c, h) in zip(candidates, scott)]
+    return X, max.(min.(scott, [_bandwidth_cap(c) for c in candidates]), b.min_bandwidth)
 end
 
 # Paper names only continuous and categorical; Ordinal is Gaussian, as integers are in HpBandSter.
 _kernel(::Domain, x, h) = Normal(x, h)
-function _kernel(d::Nominal, x, h)
-    length(d) == 1 && return DiscreteNonParametric(_bin_centres(d), [1.0])
+function _kernel(d::Nominal, k, h)
+    length(d) == 1 && return Categorical(1)
     # Declared levels, not statsmodels' levels in the data, which divides by zero at one level.
-    return DiscreteNonParametric(_bin_centres(d), [centre == x ? 1 - h : h / (length(d) - 1) for centre in _bin_centres(d)])
+    p = fill(h / (length(d) - 1), length(d))
+    p[Int(k)] = 1 - h
+    return Categorical(p)
 end
 
 # Paper's l′ is untruncated; HpBandSter truncates to [0, 1], the encoded range.
 _proposal_kernel(::Domain, x, h, b_w) = truncated(Normal(x, b_w * h), 0.0, 1.0)
 # Paper widens every bandwidth by b_w; HpBandSter doesn't on Nominal and redraws over all levels.
-_proposal_kernel(d::Nominal, x, h, b_w) =
-    DiscreteNonParametric(_bin_centres(d), [(centre == x ? 1 - h : 0.0) + h / length(d) for centre in _bin_centres(d)])
+function _proposal_kernel(d::Nominal, k, h, b_w)
+    p = fill(h / length(d), length(d))
+    p[Int(k)] += 1 - h
+    return Categorical(p)
+end
 
 _mixture(kernel, candidates, X, h) =
     MixtureModel([product_distribution([kernel(c, X[j, i], h[j]) for (j, c) in enumerate(candidates)]) for i in axes(X, 2)])
@@ -136,6 +138,9 @@ function _bohb_model(b::BOHBSampler, candidates, runs)
                      _mixture((c, x, h) -> _proposal_kernel(c, x, h, b.b_w), candidates, good...))
 end
 
+_kde_to_unit(::Domain, x) = x
+_kde_to_unit(d::Nominal, k) = (k - 0.5) / length(d)
+
 function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
     b = s.inner
     rand(b.rng) < b.ρ && return rand(b.rng, length(candidates))
@@ -148,5 +153,5 @@ function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
     xs = rand(b.rng, model.l′, b.N_s)
     # Paper takes l/g directly; HpBandSter floors both at 1e-32 to avoid dividing by zero.
     scores = max.(1e-32, pdf(model.g, xs)) ./ max.(pdf(model.l, xs), 1e-32)
-    return xs[:, argmin(scores)]
+    return [_kde_to_unit(c, x) for (c, x) in zip(candidates, xs[:, argmin(scores)])]
 end
