@@ -102,8 +102,7 @@ end
 _fittable(N_min::Int, q::Real, d::Int, N::Int) = N - max(N_min, floor(Int, q * N)) > d
 _fittable(b::BOHBSampler, d::Int) = any(ids -> _fittable(b.N_min, b.q, d, length(ids)), values(b.observations))
 
-function _bohb_kde(b::BOHBSampler, runs, ids)
-    u = stack(runs[id].unit_params for id in ids)
+function _bohb_kde(b::BOHBSampler, u)
     scott(row) = 1.06 * std(row; corrected=false) * size(u, 2)^(-1 / (4 + size(u, 1)))
     x = u[b.gaussian, :]
     k = clamp.(ceil.(Int, u[b.nominal, :] .* b.levels), 1, b.levels)
@@ -115,13 +114,10 @@ end
 
 function _bohb_model(b::BOHBSampler, d::Int, runs)
     r = maximum(r for (r, ids) in b.observations if _fittable(b.N_min, b.q, d, length(ids)))
-    ranked = sort(b.observations[r]; by=id -> runs[id].value)
-    N = length(ranked)
-    n_good = max(b.N_min, floor(Int, b.q * N))
-    n_bad = max(b.N_min, floor(Int, (1 - b.q) * N))
-    # Paper's good and worst sets overlap for small N; HpBandSter takes bad as the next n_bad, disjoint.
-    good, bad = ranked[1:n_good], ranked[(n_good+1):min(N, n_good + n_bad)]
-    return BOHBModel(r, _bohb_kde(b, runs, good), _bohb_kde(b, runs, bad))
+    u = stack(runs[id].unit_params for id in sort(b.observations[r]; by=id -> runs[id].value))
+    n_good = max(b.N_min, floor(Int, b.q * size(u, 2)))
+    # Paper's good and worst sets overlap for small N; as in HpBandSter, bad is the disjoint rest.
+    return BOHBModel(r, _bohb_kde(b, u[:, 1:n_good]), _bohb_kde(b, u[:, (n_good+1):end]))
 end
 
 function _density(kde::BOHBKDE, levels, x, k)
@@ -140,12 +136,12 @@ function _density(kde::BOHBKDE, levels, x, k)
     return total / size(kde.x, 2)
 end
 
-function _sample(b::BOHBSampler, kde::BOHBKDE)
+function _sample_l_prime(b::BOHBSampler, kde::BOHBKDE)
     i = rand(b.rng, axes(kde.x, 2))
     # Paper's l′ is untruncated; HpBandSter truncates to [0, 1], the encoded range.
     x = [rand(b.rng, truncated(Normal(kde.x[j, i], b.b_w * kde.h_x[j]), 0.0, 1.0)) for j in axes(kde.x, 1)]
     # Paper widens every bandwidth by b_w; HpBandSter doesn't on Nominal and redraws over all levels.
-    k = [rand(b.rng) < 1 - kde.h_k[j] ? kde.k[j, i] : rand(b.rng, 1:c) for (j, c) in enumerate(b.levels)]
+    k = [rand(b.rng) < (1 - kde.h_k[j]) ? kde.k[j, i] : rand(b.rng, 1:c) for (j, c) in enumerate(b.levels)]
     return x, k
 end
 
@@ -158,7 +154,7 @@ function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
         b.stale[] = false
     end
     model = b.model[]
-    samples = [_sample(b, model.good) for _ in 1:b.N_s]
+    samples = [_sample_l_prime(b, model.good) for _ in 1:b.N_s]
     # Paper takes l/g directly; HpBandSter floors both at 1e-32 to avoid dividing by zero.
     scores = [max(1e-32, _density(model.bad, b.levels, x, k)) / max(_density(model.good, b.levels, x, k), 1e-32)
               for (x, k) in samples]
