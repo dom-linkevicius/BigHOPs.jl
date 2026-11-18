@@ -102,22 +102,26 @@ end
 _fittable(N_min::Int, q::Real, d::Int, N::Int) = N - max(N_min, floor(Int, q * N)) > d
 _fittable(b::BOHBSampler, d::Int) = any(ids -> _fittable(b.N_min, b.q, d, length(ids)), values(b.observations))
 
+_scott(row, d) = 1.06 * std(row; corrected=false) * length(row)^(-1 / (4 + d))
+
 function _bohb_kde(b::BOHBSampler, u)
-    scott(row) = 1.06 * std(row; corrected=false) * size(u, 2)^(-1 / (4 + size(u, 1)))
+    d = size(u, 1)
     x = u[b.gaussian, :]
     k = clamp.(ceil.(Int, u[b.nominal, :] .* b.levels), 1, b.levels)
     # Paper: plain Scott's rule. Floor from HpBandSter for constant columns, cap from statsmodels' AA bound.
-    h_x = [max(scott(row), b.min_bandwidth) for row in eachrow(x)]
-    h_k = [max(min(scott(row), (c - 1) / c), b.min_bandwidth) for (row, c) in zip(eachrow(k), b.levels)]
+    h_x = [max(_scott(row, d), b.min_bandwidth) for row in eachrow(x)]
+    h_k = [max(min(_scott(row, d), (c - 1) / c), b.min_bandwidth) for (row, c) in zip(eachrow(k), b.levels)]
     return BOHBKDE(x, h_x, k, h_k)
 end
 
 function _bohb_model(b::BOHBSampler, d::Int, runs)
     r = maximum(r for (r, ids) in b.observations if _fittable(b.N_min, b.q, d, length(ids)))
-    u = stack(runs[id].unit_params for id in sort(b.observations[r]; by=id -> runs[id].value))
-    n_good = max(b.N_min, floor(Int, b.q * size(u, 2)))
+    ranked = sort(b.observations[r]; by=id -> runs[id].value)
+    n_good = max(b.N_min, floor(Int, b.q * length(ranked)))
     # Paper's good and worst sets overlap for small N; as in HpBandSter, bad is the disjoint rest.
-    return BOHBModel(r, _bohb_kde(b, u[:, 1:n_good]), _bohb_kde(b, u[:, (n_good+1):end]))
+    good = stack(runs[id].unit_params for id in ranked[1:n_good])
+    bad = stack(runs[id].unit_params for id in ranked[(n_good+1):end])
+    return BOHBModel(r, _bohb_kde(b, good), _bohb_kde(b, bad))
 end
 
 function _density(kde::BOHBKDE, levels, x, k)
