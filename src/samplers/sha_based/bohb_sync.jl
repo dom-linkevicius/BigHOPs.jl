@@ -90,10 +90,11 @@ function _bohb_kde(b::BOHBSampler, levels, runs, ids)
 end
 
 # Paper fits from N_min + 2 trials; HpBandSter needs more than d in each set.
-_fittable(b::BOHBSampler, d::Int, N::Int) = N - max(b.N_min, floor(Int, b.q * N)) > d
+_fittable(N_min::Int, q::Real, d::Int, N::Int) = N - max(N_min, floor(Int, q * N)) > d
+_fittable(b::BOHBSampler, d::Int) = any(ids -> _fittable(b.N_min, b.q, d, length(ids)), values(b.observations))
 
 function _bohb_model(b::BOHBSampler, levels, runs)
-    r = maximum(r for (r, ids) in b.observations if _fittable(b, length(levels), length(ids)))
+    r = maximum(r for (r, ids) in b.observations if _fittable(b.N_min, b.q, length(levels), length(ids)))
     ranked = sort(b.observations[r]; by=id -> runs[id].value)
     N = length(ranked)
     n_good = max(b.N_min, floor(Int, b.q * N))
@@ -140,8 +141,7 @@ end
 function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
     b = s.inner
     rand(b.rng) < b.ρ && return rand(b.rng, length(candidates))
-    any(ids -> _fittable(b, length(candidates), length(ids)), values(b.observations)) ||
-        return rand(b.rng, length(candidates))
+    _fittable(b, length(candidates)) || return rand(b.rng, length(candidates))
     # Paper names only continuous and categorical; Ordinal is Gaussian, as integers are in HpBandSter.
     levels = [d isa Nominal ? length(d) : 0 for d in candidates]
     if b.stale[]

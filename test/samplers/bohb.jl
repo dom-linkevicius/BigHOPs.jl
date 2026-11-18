@@ -77,8 +77,8 @@ end
     end
     rows(ids) = reduce(vcat, (runs[id].unit_params' for id in ids))
 
-    @test !BigHOPs._fittable(b, 2, 5)
-    @test BigHOPs._fittable(b, 2, 6)
+    @test !BigHOPs._fittable(b.N_min, b.q, 2, 5)
+    @test BigHOPs._fittable(b.N_min, b.q, 2, 6)
 
     foreach(v -> tell!(1, v), [5.0, 1.0, 4.0, 2.0, 3.0])
     tell!(1, 0.5)
