@@ -5,7 +5,7 @@ export Stateful
 export RandomSampler, LHSampler
 export SobolSampler
 export GPSampler, ThompsonSampling
-export Hyperband, ASHA, DEHB
+export Hyperband, ASHA, DEHB, BOHB
 export Serial, Threaded, DistributedQueue
 export minimizer, history, results, printmin
 export summaryplot
@@ -22,6 +22,7 @@ import DataFrames
 import QuasiMonteCarlo
 import Sobol
 using AbstractGPs: AbstractGP, ColVecs, posterior, mean, std
+using Distributions: Normal, truncated, pdf
 
 include("basic/domains.jl")
 include("basic/types.jl")
@@ -44,6 +45,7 @@ include("samplers/sha_based/sh.jl")
 include("samplers/sha_based/synchronous.jl")
 include("samplers/sha_based/asynchronous.jl")
 include("samplers/sha_based/dehb_sync.jl")
+include("samplers/sha_based/bohb_sync.jl")
 """
     FixedPlanSampler
 
