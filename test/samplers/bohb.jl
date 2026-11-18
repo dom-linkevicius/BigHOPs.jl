@@ -68,7 +68,7 @@ end
     @info "Testing BOHB's split into disjoint best and next sets, its threshold of more than d trials in each, and its choice of resource level"
 
     candidates = (a=Continuous(0, 1), b=Continuous(0, 1))
-    levels = BigHOPs._bohb_levels(candidates)
+    levels = [0, 0]
     b = BigHOPs.init(BOHB(R=27), candidates, 10).inner
     runs = BigHOPs.RunEntry[]
     function tell!(r, v)
@@ -101,8 +101,7 @@ end
     @info "Testing BOHB's bandwidths: Scott's rule, capped at (c-1)/c for Nominal with c the declared levels, and floored at min_bandwidth"
 
     candidates = (a=Continuous(0, 1), b=Nominal(3), c=Continuous(0, 1), d=Nominal(4))
-    levels = BigHOPs._bohb_levels(candidates)
-    @test levels == [0, 3, 0, 4]
+    levels = [0, 3, 0, 4]
     b = BigHOPs.init(BOHB(R=9, min_bandwidth=0.01), candidates, 10).inner
     us = [[0.1, 0.1, 0.5, 0.3], [0.5, 0.9, 0.5, 0.4], [0.2, 0.1, 0.5, 0.3], [0.6, 0.9, 0.5, 0.4]]
     runs = [bohb_completed(i, 1, u, 1.0) for (i, u) in enumerate(us)]
@@ -158,6 +157,39 @@ end
         @test u[1] in (0.125, 0.375, 0.625, 0.875)
         @test abs(u[2] - 0.8) < 0.4
     end
+end
+
+@testset "BOHB keeps its model until a result could change it" begin
+    @info "Testing that BOHB refits at the next draw only after a completed result at or above its model's resource level"
+
+    candidates = (a=Continuous(0, 1),)
+    s = BigHOPs.init(BOHB(R=9, rng=StableRNG(1)), candidates, 10)
+    b = s.inner
+    runs = BigHOPs.RunEntry[]
+    function tell!(r, v)
+        push!(runs, bohb_completed(length(runs) + 1, r, [v / 10], v))
+        BigHOPs._tell_inner!(b, s, runs, last(runs))
+    end
+    bracket = BigHOPs._make_bracket(s, 1, 1)
+    draw() = BigHOPs._sample_sh_inner(s, candidates, runs, BigHOPs._draw(bracket, bracket.rungs[1]))
+
+    foreach(v -> tell!(3, v), 1.0:4.0)
+    @test b.stale[]
+    draw()
+    @test !b.stale[]
+    model = b.model[]
+    @test model.r == 3
+
+    tell!(1, 0.5)
+    @test !b.stale[]
+    draw()
+    @test b.model[] === model
+
+    tell!(3, 5.0)
+    @test b.stale[]
+    draw()
+    @test b.model[] !== model
+    @test size(b.model[].bad.data, 1) == 3
 end
 
 @testset "BOHB draws at random until a resource level has enough trials" begin

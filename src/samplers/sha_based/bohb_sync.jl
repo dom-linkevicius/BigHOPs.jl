@@ -12,6 +12,8 @@ struct BOHBSampler{T<:Random.AbstractRNG} <: Sampler
     min_bandwidth::Float64
     rng::T
     observations::Dict{Int,Vector{Int}}
+    model::Base.RefValue{Any}
+    stale::Base.RefValue{Bool}
 end
 function BOHBSampler(; ρ::Real=1 / 3, q::Real=0.15, N_s::Int=64, N_min::Union{Nothing,Int}=nothing, b_w::Real=3,
                      min_bandwidth::Real=1e-3, rng::Random.AbstractRNG=StableRNG(1))
@@ -22,7 +24,7 @@ function BOHBSampler(; ρ::Real=1 / 3, q::Real=0.15, N_s::Int=64, N_min::Union{N
     b_w > 0 || throw(ArgumentError("b_w must be positive, got $b_w"))
     min_bandwidth > 0 || throw(ArgumentError("min_bandwidth must be positive, got $min_bandwidth"))
     return BOHBSampler(Float64(ρ), Float64(q), N_s, N_min, Float64(b_w), Float64(min_bandwidth), rng,
-                       Dict{Int,Vector{Int}}())
+                       Dict{Int,Vector{Int}}(), Ref{Any}(nothing), Ref(false))
 end
 
 init(s::BOHBSampler, candidates, n) = s
@@ -64,16 +66,18 @@ function _init_inner(inner::BOHBSampler, ::SuccessiveHalving, candidates)
     # Paper leaves N_min free (d + 1 in its experiments); HpBandSter requires at least d + 1.
     N_min > d || throw(ArgumentError("N_min must be at least the number of hyperparameters plus one ($(d + 1)), got $N_min"))
     return BOHBSampler(inner.ρ, inner.q, inner.N_s, N_min, inner.b_w, inner.min_bandwidth, inner.rng,
-                       Dict{Int,Vector{Int}}())
+                       Dict{Int,Vector{Int}}(), Ref{Any}(nothing), Ref(false))
 end
 
 function _tell_inner!(b::BOHBSampler, s, runs, entry)
-    entry.status === Completed && push!(get!(b.observations, entry.params.r, Int[]), entry.id)
+    entry.status === Completed || return nothing
+    r = entry.params.r
+    push!(get!(b.observations, r, Int[]), entry.id)
+    if b.model[] === nothing || r >= b.model[].r
+        b.stale[] = true
+    end
     return nothing
 end
-
-# Paper names only continuous and categorical; Ordinal is Gaussian, as integers are in HpBandSter.
-_bohb_levels(candidates) = [d isa Nominal ? length(d) : 0 for d in candidates]
 
 function _bohb_kde(b::BOHBSampler, levels, runs, ids)
     data = [Float64(c > 0 ? clamp(ceil(Int, runs[id].unit_params[j] * c), 1, c) : runs[id].unit_params[j])
@@ -96,7 +100,7 @@ function _bohb_model(b::BOHBSampler, levels, runs)
         good, bad = ranked[1:n_good], ranked[(n_good+1):min(N, n_good + n_bad)]
         # Paper fits from N_min + 2 trials; HpBandSter needs more than d in each set.
         length(good) > d && length(bad) > d &&
-            return (good=_bohb_kde(b, levels, runs, good), bad=_bohb_kde(b, levels, runs, bad))
+            return (r=r, good=_bohb_kde(b, levels, runs, good), bad=_bohb_kde(b, levels, runs, bad))
     end
     return nothing
 end
@@ -137,8 +141,13 @@ end
 
 function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
     b = s.inner
-    levels = _bohb_levels(candidates)
-    model = _bohb_model(b, levels, runs)
+    # Paper names only continuous and categorical; Ordinal is Gaussian, as integers are in HpBandSter.
+    levels = [d isa Nominal ? length(d) : 0 for d in candidates]
+    if b.stale[]
+        b.model[] = _bohb_model(b, levels, runs)
+        b.stale[] = false
+    end
+    model = b.model[]
     (model === nothing || rand(b.rng) < b.ρ) && return rand(b.rng, length(candidates))
     best, best_score = zeros(length(levels)), Inf
     for _ in 1:b.N_s
