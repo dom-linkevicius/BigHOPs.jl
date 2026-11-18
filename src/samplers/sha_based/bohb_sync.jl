@@ -7,6 +7,9 @@ end
 
 struct BOHBModel
     r::Int
+    gaussian::Vector{Int}
+    nominal::Vector{Int}
+    levels::Vector{Int}
     good::BOHBKDE
     bad::BOHBKDE
 end
@@ -108,15 +111,19 @@ function _bohb_kde(b::BOHBSampler, u, gaussian, nominal, levels)
     return BOHBKDE(x, h_x, k, h_k)
 end
 
-function _bohb_model(b::BOHBSampler, runs, gaussian, nominal, levels)
-    d = length(gaussian) + length(nominal)
-    r = maximum(r for (r, ids) in b.observations if _fittable(b.N_min, b.q, d, length(ids)))
+function _bohb_model(b::BOHBSampler, candidates, runs)
+    # Paper names only continuous and categorical; Ordinal is Gaussian, as integers are in HpBandSter.
+    nominal = [j for (j, c) in enumerate(candidates) if c isa Nominal]
+    gaussian = setdiff(1:length(candidates), nominal)
+    levels = [length(c) for c in candidates if c isa Nominal]
+    r = maximum(r for (r, ids) in b.observations if _fittable(b.N_min, b.q, length(candidates), length(ids)))
     ranked = sort(b.observations[r]; by=id -> runs[id].value)
     n_good = max(b.N_min, floor(Int, b.q * length(ranked)))
     # Paper's good and worst sets overlap for small N; as in HpBandSter, bad is the disjoint rest.
     good = stack(getfield.(runs[ranked[1:n_good]], :unit_params))
     bad = stack(getfield.(runs[ranked[(n_good+1):end]], :unit_params))
-    return BOHBModel(r, _bohb_kde(b, good, gaussian, nominal, levels), _bohb_kde(b, bad, gaussian, nominal, levels))
+    return BOHBModel(r, gaussian, nominal, levels,
+                     _bohb_kde(b, good, gaussian, nominal, levels), _bohb_kde(b, bad, gaussian, nominal, levels))
 end
 
 function _density(kde::BOHBKDE, levels, x, k)
@@ -148,22 +155,18 @@ function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
     b = s.inner
     rand(b.rng) < b.ρ && return rand(b.rng, length(candidates))
     _fittable(b, length(candidates)) || return rand(b.rng, length(candidates))
-    # Paper names only continuous and categorical; Ordinal is Gaussian, as integers are in HpBandSter.
-    nominal = [j for (j, c) in enumerate(candidates) if c isa Nominal]
-    gaussian = setdiff(1:length(candidates), nominal)
-    levels = [length(c) for c in candidates if c isa Nominal]
     if b.stale[]
-        b.model[] = _bohb_model(b, runs, gaussian, nominal, levels)
+        b.model[] = _bohb_model(b, candidates, runs)
         b.stale[] = false
     end
     model = b.model[]
-    samples = [_sample_l_prime(b, model.good, levels) for _ in 1:b.N_s]
+    samples = [_sample_l_prime(b, model.good, model.levels) for _ in 1:b.N_s]
     # Paper takes l/g directly; HpBandSter floors both at 1e-32 to avoid dividing by zero.
-    scores = [max(1e-32, _density(model.bad, levels, x, k)) / max(_density(model.good, levels, x, k), 1e-32)
+    scores = [max(1e-32, _density(model.bad, model.levels, x, k)) / max(_density(model.good, model.levels, x, k), 1e-32)
               for (x, k) in samples]
     x, k = samples[argmin(scores)]
     u = zeros(length(candidates))
-    u[gaussian] = x
-    u[nominal] = (k .- 0.5) ./ levels
+    u[model.gaussian] = x
+    u[model.nominal] = (k .- 0.5) ./ model.levels
     return u
 end

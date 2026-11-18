@@ -81,20 +81,20 @@ end
 
     foreach(v -> tell!(1, v), [5.0, 1.0, 4.0, 2.0, 3.0])
     tell!(1, 0.5)
-    model = BigHOPs._bohb_model(b, runs, [1, 2], Int[], Int[])
+    model = BigHOPs._bohb_model(b, candidates, runs)
     @test model.good.x == unit([6, 2, 4])
     @test model.bad.x == unit([5, 3, 1])
 
     foreach(v -> tell!(1, v), 6.0:20.0)
-    model = BigHOPs._bohb_model(b, runs, [1, 2], Int[], Int[])
+    model = BigHOPs._bohb_model(b, candidates, runs)
     @test size(model.good.x, 2) == 3
     @test size(model.bad.x, 2) == 18
     @test isempty(intersect(eachcol(model.good.x), eachcol(model.bad.x)))
 
     foreach(v -> tell!(9, v), 1.0:5.0)
-    @test BigHOPs._bohb_model(b, runs, [1, 2], Int[], Int[]).r == 1
+    @test BigHOPs._bohb_model(b, candidates, runs).r == 1
     tell!(9, 6.0)
-    model = BigHOPs._bohb_model(b, runs, [1, 2], Int[], Int[])
+    model = BigHOPs._bohb_model(b, candidates, runs)
     @test model.r == 9
     @test model.good.x == unit(22:24)
 end
