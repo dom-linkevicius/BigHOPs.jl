@@ -89,20 +89,18 @@ function _bohb_kde(b::BOHBSampler, levels, runs, ids)
     return (data=data, bw=max.(min.(scott, cap), b.min_bandwidth))
 end
 
+# Paper fits from N_min + 2 trials; HpBandSter needs more than d in each set.
+_fittable(b::BOHBSampler, d::Int, N::Int) = N - max(b.N_min, floor(Int, b.q * N)) > d
+
 function _bohb_model(b::BOHBSampler, levels, runs)
-    d = length(levels)
-    for r in sort!(collect(keys(b.observations)); rev=true)
-        ranked = sort(b.observations[r]; by=id -> runs[id].value)
-        N = length(ranked)
-        n_good = min(N, max(b.N_min, floor(Int, b.q * N)))
-        n_bad = max(b.N_min, floor(Int, (1 - b.q) * N))
-        # Paper's good and worst sets overlap for small N; HpBandSter takes bad as the next n_bad, disjoint.
-        good, bad = ranked[1:n_good], ranked[(n_good+1):min(N, n_good + n_bad)]
-        # Paper fits from N_min + 2 trials; HpBandSter needs more than d in each set.
-        length(good) > d && length(bad) > d &&
-            return (r=r, good=_bohb_kde(b, levels, runs, good), bad=_bohb_kde(b, levels, runs, bad))
-    end
-    return nothing
+    r = maximum(r for (r, ids) in b.observations if _fittable(b, length(levels), length(ids)))
+    ranked = sort(b.observations[r]; by=id -> runs[id].value)
+    N = length(ranked)
+    n_good = max(b.N_min, floor(Int, b.q * N))
+    n_bad = max(b.N_min, floor(Int, (1 - b.q) * N))
+    # Paper's good and worst sets overlap for small N; HpBandSter takes bad as the next n_bad, disjoint.
+    good, bad = ranked[1:n_good], ranked[(n_good+1):min(N, n_good + n_bad)]
+    return (r=r, good=_bohb_kde(b, levels, runs, good), bad=_bohb_kde(b, levels, runs, bad))
 end
 
 function _bohb_pdf(kde, levels, x)
@@ -142,6 +140,8 @@ end
 function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
     b = s.inner
     rand(b.rng) < b.ρ && return rand(b.rng, length(candidates))
+    any(ids -> _fittable(b, length(candidates), length(ids)), values(b.observations)) ||
+        return rand(b.rng, length(candidates))
     # Paper names only continuous and categorical; Ordinal is Gaussian, as integers are in HpBandSter.
     levels = [d isa Nominal ? length(d) : 0 for d in candidates]
     if b.stale[]
@@ -149,7 +149,6 @@ function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
         b.stale[] = false
     end
     model = b.model[]
-    model === nothing && return rand(b.rng, length(candidates))
     best, best_score = zeros(length(levels)), Inf
     for _ in 1:b.N_s
         x = _bohb_sample(b, model.good, levels)
