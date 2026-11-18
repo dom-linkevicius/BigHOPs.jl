@@ -163,7 +163,7 @@ end
     @info "Testing that BOHB refits at the next draw only after a completed result at or above its model's resource level"
 
     candidates = (a=Continuous(0, 1),)
-    s = BigHOPs.init(BOHB(R=9, rng=StableRNG(1)), candidates, 10)
+    s = BigHOPs.init(BOHB(R=9, ρ=0.0, rng=StableRNG(1)), candidates, 10)
     b = s.inner
     runs = BigHOPs.RunEntry[]
     function tell!(r, v)
@@ -193,12 +193,16 @@ end
 end
 
 @testset "BOHB draws at random until a resource level has enough trials" begin
-    @info "Testing that BOHB's first 2(d+1) draws are plain uniform draws from its rng"
+    @info "Testing that BOHB's first 2(d+1) draws are uniform draws from its rng, each after its ρ coin"
 
     ho = Hyperoptimizer(p -> p.a + p.b, (a=Continuous(0, 1), b=Continuous(0, 1)), BOHB(R=9, η=3, r_min=1, rng=StableRNG(5)))
     run!(ho; show_progress=false)
     rng = StableRNG(5)
-    @test [e.unit_params for e in ho.runs[1:6]] == [rand(rng, 2) for _ in 1:6]
+    expected = map(1:6) do _
+        rand(rng)
+        return rand(rng, 2)
+    end
+    @test [e.unit_params for e in ho.runs[1:6]] == expected
 end
 
 @testset "BOHB construction and basic run" begin
