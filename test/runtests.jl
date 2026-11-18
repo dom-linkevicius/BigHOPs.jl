@@ -5,7 +5,6 @@ using DataFrames
 using CairoMakie
 using AlgebraOfGraphics
 using AbstractGPs
-using Distributions: Normal, components, pdf, probs, truncated
 
 const CONCERNS = Dict(
     "basic" => ["basic/domains.jl", "basic/artefacts.jl", "basic/failures.jl", "basic/manual.jl", "basic/persistence.jl", "basic/progress.jl", "basic/dataframe.jl", "basic/plotting.jl"],

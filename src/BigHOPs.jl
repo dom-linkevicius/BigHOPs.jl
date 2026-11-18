@@ -22,7 +22,7 @@ import DataFrames
 import QuasiMonteCarlo
 import Sobol
 using AbstractGPs: AbstractGP, ColVecs, posterior, mean, std
-using Distributions: Normal, Categorical, MixtureModel, MultivariateDistribution, product_distribution, truncated, pdf
+using Distributions: Normal, truncated, pdf
 
 include("basic/domains.jl")
 include("basic/types.jl")

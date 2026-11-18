@@ -74,31 +74,29 @@ end
         push!(runs, bohb_completed(length(runs) + 1, r, rand(StableRNG(length(runs)), 2), v))
         BigHOPs._tell_inner!(b, nothing, runs, last(runs))
     end
-    points(mixture) = [mean(c) for c in components(mixture)]
-    unit(ids) = [runs[id].unit_params for id in ids]
+    unit(ids) = stack(runs[id].unit_params for id in ids)
 
     @test !BigHOPs._fittable(b.N_min, b.q, 2, 5)
     @test BigHOPs._fittable(b.N_min, b.q, 2, 6)
 
     foreach(v -> tell!(1, v), [5.0, 1.0, 4.0, 2.0, 3.0])
     tell!(1, 0.5)
-    model = BigHOPs._bohb_model(b, candidates, runs)
-    @test points(model.l) == unit([6, 2, 4])
-    @test points(model.g) == unit([5, 3, 1])
-    @test length(components(model.l′)) == 3
+    model = BigHOPs._bohb_model(b, 2, runs)
+    @test model.good.x == unit([6, 2, 4])
+    @test model.bad.x == unit([5, 3, 1])
 
     foreach(v -> tell!(1, v), 6.0:20.0)
-    model = BigHOPs._bohb_model(b, candidates, runs)
-    @test length(components(model.l)) == 3
-    @test length(components(model.g)) == 17
-    @test isempty(intersect(points(model.l), points(model.g)))
+    model = BigHOPs._bohb_model(b, 2, runs)
+    @test size(model.good.x, 2) == 3
+    @test size(model.bad.x, 2) == 17
+    @test isempty(intersect(eachcol(model.good.x), eachcol(model.bad.x)))
 
     foreach(v -> tell!(9, v), 1.0:5.0)
-    @test BigHOPs._bohb_model(b, candidates, runs).r == 1
+    @test BigHOPs._bohb_model(b, 2, runs).r == 1
     tell!(9, 6.0)
-    model = BigHOPs._bohb_model(b, candidates, runs)
+    model = BigHOPs._bohb_model(b, 2, runs)
     @test model.r == 9
-    @test points(model.l) == unit(22:24)
+    @test model.good.x == unit(22:24)
 end
 
 @testset "BOHB bandwidths follow Scott's rule with clipping" begin
@@ -106,45 +104,41 @@ end
 
     candidates = (a=Continuous(0, 1), b=Nominal(3), c=Continuous(0, 1), d=Nominal(4))
     b = BigHOPs.init(BOHB(R=9, min_bandwidth=0.01), candidates, 10).inner
+    @test b.gaussian == [1, 3]
+    @test b.nominal == [2, 4]
+    @test b.levels == [3, 4]
     us = [[0.1, 0.1, 0.5, 0.3], [0.5, 0.9, 0.5, 0.4], [0.2, 0.1, 0.5, 0.3], [0.6, 0.9, 0.5, 0.4]]
     runs = [bohb_completed(i, 1, u, 1.0) for (i, u) in enumerate(us)]
-    X, h = BigHOPs._kde_data(b, candidates, runs, 1:4)
+    kde = BigHOPs._bohb_kde(b, runs, 1:4)
 
-    @test X[2, :] == [1.0, 3.0, 1.0, 3.0]
-    @test X[4, :] == [2.0, 2.0, 2.0, 2.0]
+    @test kde.k == [1 3 1 3; 2 2 2 2]
     a = [0.1, 0.5, 0.2, 0.6]
-    @test h[1] ≈ 1.06 * sqrt(sum((a .- sum(a) / 4) .^ 2) / 4) * 4^(-1 / 8)
-    @test h[2] == 2 / 3
-    @test h[3] == 0.01
-    @test h[4] == 0.01
+    @test kde.h_x[1] ≈ 1.06 * sqrt(sum((a .- sum(a) / 4) .^ 2) / 4) * 4^(-1 / 8)
+    @test kde.h_x[2] == 0.01
+    @test kde.h_k == [2 / 3, 0.01]
 end
 
-@testset "BOHB kernels and densities" begin
-    @info "Testing BOHB's kernels, Aitchison-Aitken on Nominal and Gaussian elsewhere, and their mixture over the data"
-
-    @test BigHOPs._kernel(Continuous(0, 1), 0.4, 0.1) == Normal(0.4, 0.1)
-    @test probs(BigHOPs._kernel(Nominal(3), 2.0, 0.2)) ≈ [0.1, 0.8, 0.1]
-    @test probs(BigHOPs._kernel(Nominal(1), 1.0, 0.001)) == [1.0]
-    @test BigHOPs._proposal_kernel(Continuous(0, 1), 0.4, 0.1, 3.0) == truncated(Normal(0.4, 3.0 * 0.1), 0.0, 1.0)
-    @test probs(BigHOPs._proposal_kernel(Nominal(3), 2.0, 0.6, 3.0)) ≈ [0.2, 0.6, 0.2]
+@testset "BOHB densities" begin
+    @info "Testing BOHB's density: a product of Gaussian kernels and Aitchison-Aitken kernels on Nominal, averaged over the trials"
 
     gauss(m, x) = exp(-((x - m) / 0.1)^2 / 2) / (sqrt(2π) * 0.1)
-    mixture = BigHOPs._mixture(BigHOPs._kernel, (Nominal(3), Continuous(0, 1)), [2.0 1.0; 0.4 0.6], [0.2, 0.1])
-    @test pdf(mixture, [2.0, 0.5]) ≈ (0.8 * gauss(0.4, 0.5) + 0.1 * gauss(0.6, 0.5)) / 2
-    @test pdf(mixture, [3.0, 0.4]) ≈ (0.1 * gauss(0.4, 0.4) + 0.1 * gauss(0.6, 0.4)) / 2
+    kde = BigHOPs.BOHBKDE([0.4 0.6], [0.1], [2 1], [0.2])
+
+    @test BigHOPs._density(kde, [3], [0.5], [2]) ≈ (0.8 * gauss(0.4, 0.5) + 0.1 * gauss(0.6, 0.5)) / 2
+    @test BigHOPs._density(kde, [3], [0.4], [3]) ≈ (0.1 * gauss(0.4, 0.4) + 0.1 * gauss(0.6, 0.4)) / 2
+    @test BigHOPs._density(BigHOPs.BOHBKDE(zeros(0, 1), Float64[], [1;;], [0.001]), [1], Float64[], [1]) ≈ 0.999
 end
 
 @testset "BOHB samples around the good trials" begin
     @info "Testing BOHB's samples from the widened good density: declared Nominal levels and values in [0, 1] elsewhere"
 
-    rng = StableRNG(3)
-    candidates = (Nominal(3), Continuous(0, 1), Continuous(0, 1))
-    l′ = BigHOPs._mixture((c, x, h) -> BigHOPs._proposal_kernel(c, x, h, 3.0), candidates, [2.0; 0.0; 0.9;;], [2 / 3, 0.5, 0.001])
-    xs = [rand(rng, l′) for _ in 1:300]
+    b = BigHOPs.init(BOHB(R=9, rng=StableRNG(3)), (Nominal(3), Continuous(0, 1), Continuous(0, 1)), 10).inner
+    kde = BigHOPs.BOHBKDE([0.0; 0.9;;], [0.5, 0.001], [2;;], [2 / 3])
+    samples = [BigHOPs._sample(b, kde) for _ in 1:300]
 
-    @test Set(x[1] for x in xs) == Set([1.0, 2.0, 3.0])
-    @test all(x -> 0 <= x[2] <= 1, xs)
-    @test all(x -> abs(x[3] - 0.9) < 0.05, xs)
+    @test Set(k[1] for (_, k) in samples) == Set(1:3)
+    @test all(((x, _),) -> 0 <= x[1] <= 1, samples)
+    @test all(((x, _),) -> abs(x[2] - 0.9) < 0.05, samples)
 end
 
 @testset "BOHB proposes Nominal levels as bin centres and moves towards the good trials" begin
@@ -196,7 +190,7 @@ end
     @test b.stale[]
     draw()
     @test b.model[] !== model
-    @test length(components(b.model[].g)) == 3
+    @test size(b.model[].bad.x, 2) == 3
 end
 
 @testset "BOHB draws at random until a resource level has enough trials" begin
