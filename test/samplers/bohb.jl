@@ -110,8 +110,8 @@ end
     runs = [bohb_completed(i, 1, u, 1.0) for (i, u) in enumerate(us)]
     X, h = BigHOPs._kde_data(b, candidates, runs, 1:4)
 
-    @test X[2, :] == [1.0, 3.0, 1.0, 3.0]
-    @test X[4, :] == [2.0, 2.0, 2.0, 2.0]
+    @test X[2, :] == [0.5, 2.5, 0.5, 2.5] ./ 3
+    @test X[4, :] == fill(1.5 / 4, 4)
     a = [0.1, 0.5, 0.2, 0.6]
     @test h[1] ≈ 1.06 * sqrt(sum((a .- sum(a) / 4) .^ 2) / 4) * 4^(-1 / 8)
     @test h[2] == 2 / 3
@@ -123,15 +123,15 @@ end
     @info "Testing BOHB's kernels, Aitchison-Aitken on Nominal and Gaussian elsewhere, and their mixture over the data"
 
     @test BigHOPs._kernel(Continuous(0, 1), 0.4, 0.1) == Normal(0.4, 0.1)
-    @test probs(BigHOPs._kernel(Nominal(3), 2.0, 0.2)) ≈ [0.1, 0.8, 0.1]
-    @test probs(BigHOPs._kernel(Nominal(1), 1.0, 0.001)) == [1.0]
+    @test probs(BigHOPs._kernel(Nominal(3), 1.5 / 3, 0.2)) ≈ [0.1, 0.8, 0.1]
+    @test probs(BigHOPs._kernel(Nominal(1), 0.5, 0.001)) == [1.0]
     @test BigHOPs._proposal_kernel(Continuous(0, 1), 0.4, 0.1, 3.0) == truncated(Normal(0.4, 3.0 * 0.1), 0.0, 1.0)
-    @test probs(BigHOPs._proposal_kernel(Nominal(3), 2.0, 0.6, 3.0)) ≈ [0.2, 0.6, 0.2]
+    @test probs(BigHOPs._proposal_kernel(Nominal(3), 1.5 / 3, 0.6, 3.0)) ≈ [0.2, 0.6, 0.2]
 
     gauss(m, x) = exp(-((x - m) / 0.1)^2 / 2) / (sqrt(2π) * 0.1)
-    mixture = BigHOPs._mixture(BigHOPs._kernel, (Nominal(3), Continuous(0, 1)), [2.0 1.0; 0.4 0.6], [0.2, 0.1])
-    @test pdf(mixture, [2.0, 0.5]) ≈ (0.8 * gauss(0.4, 0.5) + 0.1 * gauss(0.6, 0.5)) / 2
-    @test pdf(mixture, [3.0, 0.4]) ≈ (0.1 * gauss(0.4, 0.4) + 0.1 * gauss(0.6, 0.4)) / 2
+    mixture = BigHOPs._mixture(BigHOPs._kernel, (Nominal(3), Continuous(0, 1)), [1.5/3 0.5/3; 0.4 0.6], [0.2, 0.1])
+    @test pdf(mixture, [1.5 / 3, 0.5]) ≈ (0.8 * gauss(0.4, 0.5) + 0.1 * gauss(0.6, 0.5)) / 2
+    @test pdf(mixture, [2.5 / 3, 0.4]) ≈ (0.1 * gauss(0.4, 0.4) + 0.1 * gauss(0.6, 0.4)) / 2
 end
 
 @testset "BOHB samples around the good trials" begin
@@ -139,10 +139,10 @@ end
 
     rng = StableRNG(3)
     candidates = (Nominal(3), Continuous(0, 1), Continuous(0, 1))
-    l′ = BigHOPs._mixture((c, x, h) -> BigHOPs._proposal_kernel(c, x, h, 3.0), candidates, [2.0; 0.0; 0.9;;], [2 / 3, 0.5, 0.001])
+    l′ = BigHOPs._mixture((c, x, h) -> BigHOPs._proposal_kernel(c, x, h, 3.0), candidates, [1.5 / 3; 0.0; 0.9;;], [2 / 3, 0.5, 0.001])
     xs = [rand(rng, l′) for _ in 1:300]
 
-    @test Set(x[1] for x in xs) == Set([1.0, 2.0, 3.0])
+    @test Set(x[1] for x in xs) == Set([0.5, 1.5, 2.5] ./ 3)
     @test all(x -> 0 <= x[2] <= 1, xs)
     @test all(x -> abs(x[3] - 0.9) < 0.05, xs)
 end
