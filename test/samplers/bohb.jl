@@ -81,20 +81,20 @@ end
 
     foreach(v -> tell!(1, v), [5.0, 1.0, 4.0, 2.0, 3.0])
     tell!(1, 0.5)
-    model = BigHOPs._bohb_model(b, 2, runs)
+    model = BigHOPs._bohb_model(b, runs, [1, 2], Int[], Int[])
     @test model.good.x == unit([6, 2, 4])
     @test model.bad.x == unit([5, 3, 1])
 
     foreach(v -> tell!(1, v), 6.0:20.0)
-    model = BigHOPs._bohb_model(b, 2, runs)
+    model = BigHOPs._bohb_model(b, runs, [1, 2], Int[], Int[])
     @test size(model.good.x, 2) == 3
     @test size(model.bad.x, 2) == 18
     @test isempty(intersect(eachcol(model.good.x), eachcol(model.bad.x)))
 
     foreach(v -> tell!(9, v), 1.0:5.0)
-    @test BigHOPs._bohb_model(b, 2, runs).r == 1
+    @test BigHOPs._bohb_model(b, runs, [1, 2], Int[], Int[]).r == 1
     tell!(9, 6.0)
-    model = BigHOPs._bohb_model(b, 2, runs)
+    model = BigHOPs._bohb_model(b, runs, [1, 2], Int[], Int[])
     @test model.r == 9
     @test model.good.x == unit(22:24)
 end
@@ -104,11 +104,8 @@ end
 
     candidates = (a=Continuous(0, 1), b=Nominal(3), c=Continuous(0, 1), d=Nominal(4))
     b = BigHOPs.init(BOHB(R=9, min_bandwidth=0.01), candidates, 10).inner
-    @test b.gaussian == [1, 3]
-    @test b.nominal == [2, 4]
-    @test b.levels == [3, 4]
     us = [[0.1, 0.1, 0.5, 0.3], [0.5, 0.9, 0.5, 0.4], [0.2, 0.1, 0.5, 0.3], [0.6, 0.9, 0.5, 0.4]]
-    kde = BigHOPs._bohb_kde(b, stack(us))
+    kde = BigHOPs._bohb_kde(b, stack(us), [1, 3], [2, 4], [3, 4])
 
     @test kde.k == [1 3 1 3; 2 2 2 2]
     a = [0.1, 0.5, 0.2, 0.6]
@@ -133,7 +130,7 @@ end
 
     b = BigHOPs.init(BOHB(R=9, rng=StableRNG(3)), (Nominal(3), Continuous(0, 1), Continuous(0, 1)), 10).inner
     kde = BigHOPs.BOHBKDE([0.0; 0.9;;], [0.5, 0.001], [2;;], [2 / 3])
-    samples = [BigHOPs._sample_l_prime(b, kde) for _ in 1:300]
+    samples = [BigHOPs._sample_l_prime(b, kde, [3]) for _ in 1:300]
 
     @test Set(k[1] for (_, k) in samples) == Set(1:3)
     @test all(((x, _),) -> 0 <= x[1] <= 1, samples)

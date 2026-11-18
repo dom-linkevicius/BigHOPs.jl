@@ -24,9 +24,6 @@ struct BOHBSampler{T<:Random.AbstractRNG} <: Sampler
     b_w::Float64
     min_bandwidth::Float64
     rng::T
-    gaussian::Vector{Int}
-    nominal::Vector{Int}
-    levels::Vector{Int}
     observations::Dict{Int,Vector{Int}}
     model::Base.RefValue{Union{Nothing,BOHBModel}}
     stale::Base.RefValue{Bool}
@@ -40,7 +37,7 @@ function BOHBSampler(; ρ::Real=1 / 3, q::Real=0.15, N_s::Int=64, N_min::Union{N
     b_w > 0 || throw(ArgumentError("b_w must be positive, got $b_w"))
     min_bandwidth > 0 || throw(ArgumentError("min_bandwidth must be positive, got $min_bandwidth"))
     return BOHBSampler(Float64(ρ), Float64(q), N_s, N_min, Float64(b_w), Float64(min_bandwidth), rng,
-                       Int[], Int[], Int[], Dict{Int,Vector{Int}}(), Ref{Union{Nothing,BOHBModel}}(nothing), Ref(false))
+                       Dict{Int,Vector{Int}}(), Ref{Union{Nothing,BOHBModel}}(nothing), Ref(false))
 end
 
 init(s::BOHBSampler, candidates, n) = s
@@ -81,10 +78,7 @@ function _init_inner(inner::BOHBSampler, ::SuccessiveHalving, candidates)
     N_min = something(inner.N_min, d + 1)
     # Paper leaves N_min free (d + 1 in its experiments); HpBandSter requires at least d + 1.
     N_min > d || throw(ArgumentError("N_min must be at least the number of hyperparameters plus one ($(d + 1)), got $N_min"))
-    # Paper names only continuous and categorical; Ordinal is Gaussian, as integers are in HpBandSter.
-    nominal = findall(c -> c isa Nominal, candidates)
     return BOHBSampler(inner.ρ, inner.q, inner.N_s, N_min, inner.b_w, inner.min_bandwidth, inner.rng,
-                       setdiff(1:d, nominal), nominal, [length(candidates[j]) for j in nominal],
                        Dict{Int,Vector{Int}}(), Ref{Union{Nothing,BOHBModel}}(nothing), Ref(false))
 end
 
@@ -104,24 +98,25 @@ _fittable(b::BOHBSampler, d::Int) = any(ids -> _fittable(b.N_min, b.q, d, length
 
 _scott(row, d) = 1.06 * std(row; corrected=false) * length(row)^(-1 / (4 + d))
 
-function _bohb_kde(b::BOHBSampler, u)
+function _bohb_kde(b::BOHBSampler, u, gaussian, nominal, levels)
     d = size(u, 1)
-    x = u[b.gaussian, :]
-    k = clamp.(ceil.(Int, u[b.nominal, :] .* b.levels), 1, b.levels)
+    x = u[gaussian, :]
+    k = clamp.(ceil.(Int, u[nominal, :] .* levels), 1, levels)
     # Paper: plain Scott's rule. Floor from HpBandSter for constant columns, cap from statsmodels' AA bound.
     h_x = [max(_scott(row, d), b.min_bandwidth) for row in eachrow(x)]
-    h_k = [max(min(_scott(row, d), (c - 1) / c), b.min_bandwidth) for (row, c) in zip(eachrow(k), b.levels)]
+    h_k = [max(min(_scott(row, d), (c - 1) / c), b.min_bandwidth) for (row, c) in zip(eachrow(k), levels)]
     return BOHBKDE(x, h_x, k, h_k)
 end
 
-function _bohb_model(b::BOHBSampler, d::Int, runs)
+function _bohb_model(b::BOHBSampler, runs, gaussian, nominal, levels)
+    d = length(gaussian) + length(nominal)
     r = maximum(r for (r, ids) in b.observations if _fittable(b.N_min, b.q, d, length(ids)))
     ranked = sort(b.observations[r]; by=id -> runs[id].value)
     n_good = max(b.N_min, floor(Int, b.q * length(ranked)))
     # Paper's good and worst sets overlap for small N; as in HpBandSter, bad is the disjoint rest.
-    good = stack(runs[id].unit_params for id in ranked[1:n_good])
-    bad = stack(runs[id].unit_params for id in ranked[(n_good+1):end])
-    return BOHBModel(r, _bohb_kde(b, good), _bohb_kde(b, bad))
+    good = stack(getfield.(runs[ranked[1:n_good]], :unit_params))
+    bad = stack(getfield.(runs[ranked[(n_good+1):end]], :unit_params))
+    return BOHBModel(r, _bohb_kde(b, good, gaussian, nominal, levels), _bohb_kde(b, bad, gaussian, nominal, levels))
 end
 
 function _density(kde::BOHBKDE, levels, x, k)
@@ -140,12 +135,12 @@ function _density(kde::BOHBKDE, levels, x, k)
     return total / size(kde.x, 2)
 end
 
-function _sample_l_prime(b::BOHBSampler, kde::BOHBKDE)
+function _sample_l_prime(b::BOHBSampler, kde::BOHBKDE, levels)
     i = rand(b.rng, axes(kde.x, 2))
     # Paper's l′ is untruncated; HpBandSter truncates to [0, 1], the encoded range.
     x = [rand(b.rng, truncated(Normal(kde.x[j, i], b.b_w * kde.h_x[j]), 0.0, 1.0)) for j in axes(kde.x, 1)]
     # Paper widens every bandwidth by b_w; HpBandSter doesn't on Nominal and redraws over all levels.
-    k = [rand(b.rng) < (1 - kde.h_k[j]) ? kde.k[j, i] : rand(b.rng, 1:c) for (j, c) in enumerate(b.levels)]
+    k = [rand(b.rng) < (1 - kde.h_k[j]) ? kde.k[j, i] : rand(b.rng, 1:c) for (j, c) in enumerate(levels)]
     return x, k
 end
 
@@ -153,18 +148,22 @@ function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
     b = s.inner
     rand(b.rng) < b.ρ && return rand(b.rng, length(candidates))
     _fittable(b, length(candidates)) || return rand(b.rng, length(candidates))
+    # Paper names only continuous and categorical; Ordinal is Gaussian, as integers are in HpBandSter.
+    nominal = [j for (j, c) in enumerate(candidates) if c isa Nominal]
+    gaussian = setdiff(1:length(candidates), nominal)
+    levels = [length(c) for c in candidates if c isa Nominal]
     if b.stale[]
-        b.model[] = _bohb_model(b, length(candidates), runs)
+        b.model[] = _bohb_model(b, runs, gaussian, nominal, levels)
         b.stale[] = false
     end
     model = b.model[]
-    samples = [_sample_l_prime(b, model.good) for _ in 1:b.N_s]
+    samples = [_sample_l_prime(b, model.good, levels) for _ in 1:b.N_s]
     # Paper takes l/g directly; HpBandSter floors both at 1e-32 to avoid dividing by zero.
-    scores = [max(1e-32, _density(model.bad, b.levels, x, k)) / max(_density(model.good, b.levels, x, k), 1e-32)
+    scores = [max(1e-32, _density(model.bad, levels, x, k)) / max(_density(model.good, levels, x, k), 1e-32)
               for (x, k) in samples]
     x, k = samples[argmin(scores)]
     u = zeros(length(candidates))
-    u[b.gaussian] = x
-    u[b.nominal] = (k .- 0.5) ./ b.levels
+    u[gaussian] = x
+    u[nominal] = (k .- 0.5) ./ levels
     return u
 end
