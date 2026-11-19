@@ -1,4 +1,4 @@
-# Convenience functionalities
+# General functionalities
 
 Besides the sampler and the executor, BigHOPs.jl has a few features that make long or expensive searches easier to run: objectives that carry state between trials, stopping a run cleanly, checkpointing and resuming, and extending a finished run.
 

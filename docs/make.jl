@@ -16,22 +16,20 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
-        "Getting Started" => [
-            "Introduction" => "introduction.md",
-            "Getting Started" => "getting_started.md",
-        ],
-        "User Guide" => [
+        "Introduction" => "introduction.md",
+        "Sample Code" => "sample_code.md",
+        "Executors" => [
             "Executors" => "executors.md",
+            "General functionalities" => "general_functionalities.md",
+        ],
+        "Samplers" => [
             "Samplers" => "samplers.md",
-            "Convenience functionalities" => "convenience.md",
-            "Plotting" => "plotting.md",
+            "Benchmarks" => "benchmarks.md",
         ],
-        "Benchmarks" => "benchmarks.md",
-        "Background & Reference" => [
-            "Provenance" => "provenance.md",
-            "References" => "references.md",
-        ],
+        "Plotting" => "plotting.md",
         "Contributing" => "contributing.md",
+        "Provenance" => "provenance.md",
+        "References" => "references.md",
         "API" => "api.md",
     ],
     warnonly=true,

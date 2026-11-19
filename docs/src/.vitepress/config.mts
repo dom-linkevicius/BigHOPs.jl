@@ -33,7 +33,9 @@ const sidebarTemp = {
 }
 
 const sidebar = (sidebarTemp.sidebar as any).map((item: any) =>
-  item.items && item.text !== 'Getting Started' ? { ...item, collapsed: true } : item
+  ['Introduction', 'Sample Code', 'Plotting', 'Contributing', 'Provenance', 'References', 'API'].includes(item.text) ? { ...item, items: [] }
+  : item.items ? { ...item, collapsed: true }
+  : item
 )
 
 // https://vitepress.dev/reference/site-config
