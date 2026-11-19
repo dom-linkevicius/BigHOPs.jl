@@ -63,19 +63,7 @@ These samplers need an objective with a resource knob: the objective receives th
 
 A bracket starts some number of trials at one resource level and halves its way up to `R`, and the schedule runs several brackets, from aggressive (many trials, starting at `r_min`) to conservative (a few trials, all at `R`).
 
-When a trial is promoted to a higher resource level, it does not have to start again from scratch. Wrap the objective in `Stateful`, and it receives the promoted trial's earlier state as `pre_artefact`, so training can continue where it stopped:
-
-```julia
-function objective(p; pre_artefact=nothing)
-    model, epochs_done = pre_artefact === nothing ? (new_model(p), 0) : pre_artefact
-    train!(model, p.r - epochs_done)
-    return validation_loss(model), (model, p.r)
-end
-
-ho = Hyperoptimizer(Stateful(objective), candidates, Hyperband(R=81, η=3, r_min=1))
-```
-
-`Hyperband`, `ASHA` and `BOHB` pass the state on; `DEHB` trains every trial from scratch.
+When a trial is promoted to a higher resource level, it does not have to start again from scratch: with a `Stateful` objective, `Hyperband`, `ASHA` and `BOHB` pass it the earlier trial's state, so training can continue where it stopped, while `DEHB` trains every trial from scratch. See [Stateful objectives](@ref).
 
 ### Hyperband
 

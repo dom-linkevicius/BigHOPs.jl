@@ -60,16 +60,4 @@ run!(ho; executor=DistributedQueue(8; spawn_worker, setup_worker, max_single_run
 
 ## Failures and checkpoints
 
-All executors handle failing trials the same way. A trial whose objective throws, or returns `NaN` or something other than a number, is marked `Failed` and the search continues; under `DistributedQueue`, a trial that runs past `max_single_runtime` is marked `TimedOut`. Failed trials stay in the results with their parameters, so they can be inspected and reproduced.
-
-Long runs can be checkpointed, so that a crash does not lose the trials already evaluated:
-
-```julia
-run!(ho; executor=Threaded(), save_every=10, save_path="ho_checkpoint.jld2")
-
-# after a crash, in a new session:
-ho = load_hyperoptimizer(objective, "ho_checkpoint.jld2")
-run!(ho; executor=Threaded())
-```
-
-With `save_path` set, `ho` is saved when the run ends, and also after every `save_every` trials if that is set.
+A failing trial does not stop the search under any executor; see [Trial states](@ref) for how failures are recorded, and [Saving and resuming](@ref) for checkpointing long runs.
