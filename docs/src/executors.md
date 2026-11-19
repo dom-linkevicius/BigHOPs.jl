@@ -9,6 +9,8 @@ ho = Hyperoptimizer(objective, candidates; sampler=RandomSampler(), n=100)
 run!(ho; executor=Threaded())
 ```
 
+Pick the executor by where the trials run: `Serial` for development and debugging, `Threaded` for one machine, and `DistributedQueue` for clusters, or for trials that need a process of their own or a time limit. Checkpoint long runs, so that a crash does not lose the trials already evaluated; see [Saving and resuming](@ref).
+
 ## Serial
 
 ```@docs; canonical=false

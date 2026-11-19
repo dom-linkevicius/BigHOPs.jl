@@ -1,97 +1,132 @@
 # Benchmarks
 
-To check that the samplers and executors deliver what they promise, the repository runs two benchmarks: a toy function from the literature, where the optimum is known and published results can be compared against, and a real neural network hyperparameter search, where wall-clock time and executor behaviour matter. The code is in [`benchmarks/`](https://github.com/dom-linkevicius/BigHOPs.jl/tree/master/benchmarks).
+## Practical recommendations
 
-## Stochastic Counting Ones
+These come from the benchmarks below, so treat them as a starting point rather than a rule.
 
-This benchmark comes from Falkner et al. (2018), the paper that introduced BOHB, and is also used in §5.1 of Awad et al. (2021), the paper that introduced DEHB. The objective is
+- **With a resource knob, use a successive-halving sampler.** If a larger `p.r`, such as more epochs, samples or simulation steps, gives a more accurate evaluation, successive halving reaches good configurations much sooner than spending the full budget on every trial. Wrap the objective in `Stateful`, so that promoted trials continue instead of starting over.
+- **Pick it by the size of the search space.** With a handful of hyperparameters, `Hyperband` or `ASHA` with random draws is a cheap and robust choice. With more, a model-based sampler pays off: `BOHB` did best on the smaller counting ones problem, and `DEHB` on the larger one, where `BOHB`'s density model needs many completed trials before it can be fitted. `DEHB` trains every trial from scratch, so it costs more wall-clock time with a `Stateful` objective.
+- **Without a resource knob, use a full-budget sampler.** `SobolSampler` and `RandomSampler` need no fixed number of trials, while `LHSampler` needs it up front. The space-filling designs cover the space more evenly when only a few trials are affordable, but did no better than random draws in the neural network benchmark.
+
+## Problems
+
+```@raw html
+<details class="details custom-block"><summary>Stochastic Counting Ones, 16 dimensions</summary>
+```
+
+![Stochastic Counting Ones, 16 dimensions](figures/counting_ones_16d_regret.png)
+
+```@raw html
+<details class="details custom-block"><summary>Problem definition</summary>
+```
+
+The problem comes from [Falkner2018](@citet), and is also used in §5.1 of [Awad2021](@citet). The objective is
 
 ```math
 f(x) = -\left(\sum_{x \in X_{cat}} x + \sum_{x \in X_{cont}} \mathbb{E}_b[B_{p=x}]\right)
 ```
 
-over binary and continuous hyperparameters, where the resource `b` is the number of Bernoulli samples used to estimate each continuous variable's mean, so a low-resource evaluation is a noisy one. The schedule is `r_min=9`, `R=729`, `η=3`, as in the papers. Regret is normalized as `(f(x) + d) / d`, with `d` the total number of hyperparameters, so 0 is the optimum and 1 the worst case. The plotted regret is the true, noise-free regret of the incumbent, the best measured trial at the highest resource level reached so far. Each sampler is run 50 times, and the curves show the mean with its standard error.
+over 8 binary hyperparameters `X_cat` and 8 continuous hyperparameters `X_cont` in `[0, 1]`, so `d = 16`. Each continuous hyperparameter's Bernoulli mean is estimated from `b` samples, so `b` is the resource, and a low-resource evaluation is a noisy one. The optimum sets every hyperparameter to 1.
 
-With 8 binary and 8 continuous hyperparameters (`d = 16`), every sampler gets a cumulative budget of 10⁴ full evaluations:
+The metric is the normalized regret `(f(x) + d) / d`, so 0 is the optimum and 1 the worst case. The plotted regret is the noise-free regret of the incumbent, the best measured trial at the highest resource level reached so far, against the cumulative resource spent, in units of full evaluations (`b = 729`).
 
-![Stochastic Counting Ones, 16 dimensions](figures/counting_ones_16d_regret.png)
+```@raw html
+</details>
+<details class="details custom-block"><summary>Computational setup</summary>
+```
 
-With 32 binary and 32 continuous hyperparameters (`d = 64`), `RandomSampler` gets 10⁶ full evaluations, and `Hyperband`, `DEHB` and `BOHB` get 10⁴:
+- `RandomSampler` evaluates every trial at the full `b = 729`.
+- `Hyperband`, `DEHB` and `BOHB` use `r_min = 9`, `R = 729` and `η = 3`, as in both papers, and otherwise their default settings.
+- Every sampler gets a budget of 10⁴ full evaluations; the successive-halving samplers repeat their schedule until they reach it.
+- Each sampler is run 50 times with different seeds, each run under `Serial`, with the runs spread over parallel workers. The curves show the mean and its standard error.
+
+```@raw html
+</details>
+<details class="details custom-block"><summary>Comparison to source publication</summary>
+```
+
+The figure follows the axes of Figure 3 of [Falkner2018](@citet).
+
+- `RandomSampler` and `Hyperband` match their random search and Hyperband curves.
+- `BOHB` is slower than theirs: it reaches a regret of 10⁻³ at about 2000 full evaluations, where theirs needs about 200. The `BOHB` curve in the 8+8 panel of Figure 18 of [Awad2021](@citet), also run with HpBandSter, is slower than Falkner et al.'s by a similar margin. Ours matches it up to about 700 full evaluations, and then needs about 1.5 times its budget to reach 1.2·10⁻³. We have not found the reason for the gap to Falkner et al. Scheduling brackets width-first, smaller brackets, the incumbent rule, the budget accounting and the plotted metric were all checked and ruled out.
+- `DEHB` is slower than in the same panel of Awad et al.: it reaches 10⁻³ at about 10⁴ full evaluations, where theirs needs about 2500. We have not investigated why.
+
+```@raw html
+</details>
+</details>
+<details class="details custom-block"><summary>Stochastic Counting Ones, 64 dimensions</summary>
+```
 
 ![Stochastic Counting Ones, 64 dimensions](figures/counting_ones_64d_regret.png)
 
-Mean normalized regret at a given cumulative budget, in units of full evaluations:
+```@raw html
+<details class="details custom-block"><summary>Problem definition</summary>
+```
 
-| `d = 16` | 10 | 10² | 10³ | 10⁴ |
-|:--|--:|--:|--:|--:|
-| `RandomSampler` | 0.35 | 0.25 | 0.19 | 0.14 |
-| `Hyperband` | 0.24 | 0.19 | 0.15 | 0.12 |
-| `DEHB` | 0.22 | 0.13 | 0.015 | 9.7e-4 |
-| `BOHB` | 0.14 | 0.038 | 2.0e-3 | 5.5e-4 |
+The problem comes from [Falkner2018](@citet), and is also used in §5.1 of [Awad2021](@citet). The objective is
 
-| `d = 64` | 10² | 10³ | 10⁴ | 10⁶ |
-|:--|--:|--:|--:|--:|
-| `RandomSampler` | 0.37 | 0.33 | 0.31 | 0.26 |
-| `Hyperband` | 0.34 | 0.32 | 0.29 | |
-| `DEHB` | 0.29 | 0.13 | 0.018 | |
-| `BOHB` | 0.32 | 0.22 | 0.13 | |
+```math
+f(x) = -\left(\sum_{x \in X_{cat}} x + \sum_{x \in X_{cont}} \mathbb{E}_b[B_{p=x}]\right)
+```
 
-What the results show:
+over 32 binary hyperparameters `X_cat` and 32 continuous hyperparameters `X_cont` in `[0, 1]`, so `d = 64`. Each continuous hyperparameter's Bernoulli mean is estimated from `b` samples, so `b` is the resource, and a low-resource evaluation is a noisy one. The optimum sets every hyperparameter to 1.
 
-- **Cheap evaluations help early, but not for long.** `Hyperband` gets ahead of `RandomSampler` early on (0.26 against 0.51 after one full evaluation's worth of budget at `d = 16`), because low-resource trials let it look at many more configurations. But it still draws every configuration at random, so afterwards it improves at the same slow rate as random search and ends only slightly lower.
-- **Learning from earlier trials is what makes the difference.** `BOHB` and `DEHB` both use the results of previous trials to choose new ones. At `d = 16`, both end more than two orders of magnitude below `Hyperband`.
-- **`BOHB` is best with 16 hyperparameters.** It has the lowest regret at every budget, reaching 10⁻² in about 300 full evaluations, where `DEHB` needs about 1200. Its curve closely follows Figure 3 of Falkner et al. (2018) up to about 700 full evaluations, and is somewhat slower to reach 10⁻³ after that.
-- **`DEHB` is best with 64 hyperparameters.** It reaches 0.018 at 10⁴ full evaluations, where `BOHB` is at 0.13. `BOHB`'s model needs more than `d` completed trials in both its good and its bad set before it can be fitted at all (at least 130 trials at a resource level when `d = 64`), and Scott's rule bandwidths shrink as `n^(-1/(d+4))`, so in 64 dimensions its densities stay broad. Falkner et al. (2018) also report `BOHB` losing ground at 64 dimensions on this benchmark.
-- **Random search barely moves in high dimensions.** With a hundred times the budget, `RandomSampler` ends at 0.26, far above `DEHB`'s 0.018.
+The metric is the normalized regret `(f(x) + d) / d`, so 0 is the optimum and 1 the worst case. The plotted regret is the noise-free regret of the incumbent, the best measured trial at the highest resource level reached so far, against the cumulative resource spent, in units of full evaluations (`b = 729`).
 
-## Neural network hyperparameter search
+```@raw html
+</details>
+<details class="details custom-block"><summary>Computational setup</summary>
+```
 
-The second benchmark trains a small MLP on the Titanic dataset (via `MLDatasets.jl`), minimizing validation loss over five hyperparameters: learning rate, number of dense layers, hidden width, activation, and L2 regularization strength.
+- `RandomSampler` evaluates every trial at the full `b = 729`.
+- `Hyperband`, `DEHB` and `BOHB` use `r_min = 9`, `R = 729` and `η = 3`, as in both papers, and otherwise their default settings.
+- `RandomSampler` gets a budget of 10⁶ full evaluations, and the others 10⁴; the successive-halving samplers repeat their schedule until they reach it.
+- Each sampler is run 50 times with different seeds, each run under `Serial`, with the runs spread over parallel workers. The curves show the mean and its standard error.
 
-The comparison is set up as "same budget, who gets there first":
+```@raw html
+</details>
+<details class="details custom-block"><summary>Comparison to source publication</summary>
+```
 
-- `Hyperband`, `ASHA` and `DEHB` run their own one-pass bracket schedule (`R=1215`, `η=3`, `r_min=5`, giving 6 brackets), where one resource unit is 6 training epochs, so a bottom-rung trial trains for 30 epochs and a top-rung one for 7290.
-- That schedule tries 415 distinct configurations and spends about 205k epochs in total, so `RandomSampler`, `LHSampler` and `SobolSampler` are given the same: 415 trials, with their per-trial epoch count set so the totals match. No sampler gets more compute than another; only the way it is spent differs.
-- Each sampler runs under `Serial` and under `Threaded` (64 threads); the problem is not large enough to warrant `DistributedQueue`.
-- Every sampler and executor combination is repeated 20 times, and the figure shows the median.
+The figure follows the axes of Figure 6 of [Awad2021](@citet).
 
-Regret is a run's best validation loss so far minus the best loss seen across every run in the benchmark (0.425), since the true optimum is not known.
+- `RandomSampler` matches their random search.
+- `DEHB` is close to theirs, but needs somewhat more budget for the same regret: it reaches 0.02 at about 10⁴ full evaluations, where theirs needs about 7·10³. We have not investigated why.
+- `BOHB` does better than theirs, which levels off at about 0.22, while ours reaches 0.13 at 10⁴ full evaluations. One known difference is that Awad et al. ran `BOHB` with a minimum bandwidth of 0.3 (their Appendix D.1), where we use HpBandSter's default of 10⁻³.
+- `Hyperband` is not in their Figure 6. It stays close to `RandomSampler` here, as it does in the 32+32 panel of their Figure 18.
+
+```@raw html
+</details>
+</details>
+<details class="details custom-block"><summary>Neural network hyperparameter search</summary>
+```
 
 ![Wall-clock regret comparison](figures/wallclock_regret_comparison.png)
 
-Median wall-clock time to reach a given regret, and median total time per run:
+```@raw html
+<details class="details custom-block"><summary>Problem definition</summary>
+```
 
-| | regret ≤ 0.03 | regret ≤ 0.02 | total, `Serial` | total, `Threaded` | speed-up |
-|:--|--:|--:|--:|--:|--:|
-| `RandomSampler` | 11.6 s | 124 s | 291 s | 38.5 s | 7.6× |
-| `LHSampler` | 32.1 s | not reached | 279 s | 37.2 s | 7.5× |
-| `SobolSampler` | 28.8 s | not reached | 281 s | 37.6 s | 7.5× |
-| `Hyperband` | 3.0 s | 11.8 s | 278 s | 52.4 s | 5.3× |
-| `ASHA` | 2.5 s | 22.8 s | 272 s | 51.6 s | 5.3× |
-| `DEHB` | 3.0 s | 55.0 s | 415 s | 68.9 s | 6.0× |
+A small multilayer perceptron predicts survival on the Titanic dataset (from `MLDatasets.jl`), trained on 80% of the passengers with Adam and a batch size of 32. The objective is the cross-entropy loss on the remaining 20%, minimized over five hyperparameters:
 
-The first two columns are for `Serial`; "not reached" means the median run never got there.
+- learning rate, log-uniform in `[10⁻⁵, 10⁻¹]`;
+- number of dense layers, 1 to 3;
+- hidden width, 8, 16, 32 or 64;
+- activation, `tanh` or `relu`;
+- L2 regularization strength, log-uniform in `[10⁻⁶, 10⁻¹]`.
 
-What the results show:
+The benchmark is our own, so there is no source publication. Since the true optimum is not known, the metric is the regret against the best validation loss seen across every run of the benchmark: a run's best loss so far minus that best loss, plotted against wall-clock time.
 
-- **Successive halving gets there first.** Under `Serial`, the successive-halving samplers reach a regret of 0.03 in about 3 s, against 12–32 s for the full-budget samplers, and `Hyperband` reaches 0.02 ten times sooner than `RandomSampler`. Under `Threaded` the gap is wider still: their first results arrive within a fraction of a second, while the full-budget samplers' first trials take about 4 s to finish.
-- **The final results are close.** Every sampler ends within 0.017–0.022 of the best loss. With five hyperparameters and a noisy objective, random draws find good configurations eventually, so the advantage of successive halving here is speed rather than a lower final loss.
-- **Space-filling designs did not help.** `LHSampler` and `SobolSampler` ended level with `RandomSampler`, and were no faster to reach low regret.
-- **`DEHB` costs more per run.** It takes about 50% longer than `Hyperband` and `ASHA` under `Serial`, because it trains every trial from scratch, while they continue promoted trials from their saved state through `Stateful`.
-- **`Threaded` speeds everything up.** On 64 threads, the full-budget samplers run 7.5× faster than under `Serial`, since all their trials are independent. The successive-halving samplers gain 5–6×, most likely because promotions have to wait for earlier results, and the few long top-rung trials at the end of the schedule leave most threads idle.
+```@raw html
+</details>
+<details class="details custom-block"><summary>Computational setup</summary>
+```
 
-## Practical recommendations
+- `Hyperband`, `ASHA` and `DEHB` run one pass of their schedule, with `R = 1215`, `η = 3` and `r_min = 5`, giving 6 brackets. One resource unit is 6 training epochs, so a trial trains for 30 to 7290 epochs. `Hyperband` and `ASHA` continue promoted trials through `Stateful`, while `DEHB` trains every trial from scratch.
+- That schedule tries 415 configurations and spends about 205k epochs, so `RandomSampler`, `LHSampler` and `SobolSampler` get 415 trials with the same epochs in total, split evenly between them. No sampler gets more compute than another.
+- Each sampler runs under `Serial` and under `Threaded` on 64 threads, 20 times each. The figure shows the median.
 
-These follow from the two benchmarks above, a toy problem and one small neural network, so treat them as a starting point rather than a rule.
-
-- **If the objective has a resource knob, use a successive-halving sampler.** Epochs, training samples and simulation steps all work, as long as a larger `p.r` gives a more accurate evaluation. In both benchmarks this reached good configurations far sooner than spending the full budget on every trial. Wrap the objective in `Stateful`, so that promoted trials continue instead of starting over.
-- **Pick the successive-halving sampler by the size of the search space.**
-  - With a handful of hyperparameters, `Hyperband` or `ASHA` with the default random inner sampler is a robust, cheap choice.
-  - With around 16, `BOHB` did best.
-  - With around 64, `DEHB` did best. Keep in mind that it trains every trial from scratch, so it costs more wall-clock time per run with a `Stateful` objective.
-- **Without a resource knob, start with `SobolSampler` or `RandomSampler`.** `SobolSampler` needs no fixed number of trials; `LHSampler` needs `n` up front. In our benchmark neither did better than `RandomSampler`, but they do cover the space more evenly when only a few trials are affordable.
-- **Pick the executor by where the trials run.**
-  - `Serial` is for development and debugging.
-  - `Threaded` is for one machine; it gave a 5–7.5× speed-up on 64 threads.
-  - `DistributedQueue` is for clusters, or for trials that need a process of their own or a time limit (`max_single_runtime`).
-- **Checkpoint long runs** with `save_every` and `save_path`, so that a crash does not lose the trials already evaluated.
+```@raw html
+</details>
+</details>
+```

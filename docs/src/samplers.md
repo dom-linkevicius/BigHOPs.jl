@@ -40,7 +40,7 @@ GPSampler(gp; next_point, noise, n_initial, initial=SobolSampler(), fit_hyperpar
           standardize=BigHOPs.zscore, strict_initialization=true, rng=StableRNG(1))
 ```
 
-Models the objective as a Gaussian process over the hyperparameters. The first `n_initial` trials come from `initial`; after that, the GP is conditioned on every completed trial, and `next_point` chooses each new trial from the posterior. `ThompsonSampling(n_candidates; jitter)` is the provided `next_point`: it draws the posterior at `n_candidates` Sobol points and returns the one where the draw is lowest.
+Models the objective as a Gaussian process over the hyperparameters. The first `n_initial` trials come from `initial`; after that, the GP is conditioned on every completed trial, and `next_point` chooses each new trial from the posterior. `ThompsonSampling(n_candidates; jitter)` [Kandasamy2018](@cite) is the provided `next_point`: it draws the posterior at `n_candidates` Sobol points and returns the one where the draw is lowest.
 
 ```julia
 using AbstractGPs
@@ -71,7 +71,7 @@ When a trial is promoted to a higher resource level, it does not have to start a
 Hyperband(; R, η=3, r_min=1, iterations=1, inner=RandomSampler())
 ```
 
-Successive halving as in Li et al. (2018): a rung must finish before any of its trials are promoted. `inner` draws the starting configurations, at random by default. When every open bracket is waiting on results and the executor has spare capacity, the next bracket starts.
+Successive halving as in [Li2018](@citet): a rung must finish before any of its trials are promoted. `inner` draws the starting configurations, at random by default. When every open bracket is waiting on results and the executor has spare capacity, the next bracket starts.
 
 ### ASHA
 
@@ -79,7 +79,7 @@ Successive halving as in Li et al. (2018): a rung must finish before any of its 
 ASHA(; R, η=3, r_min=1, iterations=1, inner=RandomSampler())
 ```
 
-Asynchronous `Hyperband` (Li et al., 2020), with the same schedule and arguments: a trial is promoted as soon as it is among the best `1/η` completed so far in its rung, instead of waiting for the rung to finish. This keeps workers busy under `Threaded` or `DistributedQueue` when trial durations vary.
+Asynchronous `Hyperband` [Li2020](@cite), with the same schedule and arguments: a trial is promoted as soon as it is among the best `1/η` completed so far in its rung, instead of waiting for the rung to finish. This keeps workers busy under `Threaded` or `DistributedQueue` when trial durations vary.
 
 ### DEHB
 
@@ -87,7 +87,7 @@ Asynchronous `Hyperband` (Li et al., 2020), with the same schedule and arguments
 DEHB(; R, η=3, r_min=1, iterations=1, F=0.5, crossover=0.5, rng=StableRNG(1))
 ```
 
-`Hyperband`'s schedule with differential evolution in place of random draws (Awad et al., 2021). Each resource level keeps a subpopulation of configurations; new trials are mutated and crossed over from them, so later trials build on the ones that did well. `F` is the mutation factor and `crossover` the crossover probability. Every trial trains from scratch, so a `Stateful` objective never receives a `pre_artefact`.
+`Hyperband`'s schedule with differential evolution in place of random draws [Awad2021](@cite). Each resource level keeps a subpopulation of configurations; new trials are mutated and crossed over from them, so later trials build on the ones that did well. `F` is the mutation factor and `crossover` the crossover probability. Every trial trains from scratch, so a `Stateful` objective never receives a `pre_artefact`.
 
 ### BOHB
 
@@ -96,6 +96,6 @@ BOHB(; R, η=3, r_min=1, iterations=1, ρ=1/3, q=0.15, N_s=64, N_min=nothing, b_
      min_bandwidth=1e-3, rng=StableRNG(1))
 ```
 
-`Hyperband`'s schedule with the first rung of each bracket drawn from kernel density estimates (Falkner et al., 2018), while promotions are as in `Hyperband`. Once a resource level has enough completed trials, they are split into the best ones and the rest, a density is fitted to each, and the next configuration is the one among `N_s` candidates that is most likely under the good density relative to the bad one. A fraction `ρ` of draws stays uniformly random, so the search keeps exploring.
+`Hyperband`'s schedule with the first rung of each bracket drawn from kernel density estimates [Falkner2018](@cite), while promotions are as in `Hyperband`. Once a resource level has enough completed trials, they are split into the best ones and the rest, a density is fitted to each, and the next configuration is the one among `N_s` candidates that is most likely under the good density relative to the bad one. A fraction `ρ` of draws stays uniformly random, so the search keeps exploring.
 
 The model needs more completed trials as the number of hyperparameters `d` grows: by default `N_min = d + 1`, and both the good and the bad set need more than `d` trials, so a resource level gets a model only after about `2d + 2` trials there.

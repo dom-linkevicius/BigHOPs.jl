@@ -1,11 +1,14 @@
-using Documenter, DocumenterVitepress
+using Documenter, DocumenterVitepress, DocumenterCitations
 
 using BigHOPs
 
 cp(joinpath(@__DIR__, "benchmarks"), joinpath(@__DIR__, "src", "figures"); force=true)
 
+bib = CitationBibliography(joinpath(@__DIR__, "src", "references.bib"); style=:authoryear)
+
 makedocs(;
     modules=[BigHOPs],
+    plugins=[bib],
     authors="Domas Linkevicius",
     repo="https://github.com/dom-linkevicius/BigHOPs.jl",
     sitename="BigHOPs.jl",
