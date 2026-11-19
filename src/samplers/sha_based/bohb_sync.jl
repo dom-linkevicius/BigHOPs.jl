@@ -62,10 +62,11 @@ with the details it leaves open taken from the reference implementation
 (https://github.com/automl/HpBandSter). Promotions are as in `Hyperband`.
 
 A fraction `ρ` of draws, and every draw before a resource level has enough completed
-trials, is uniform at random. Otherwise the completed trials at the largest such level are
-split into the best `q` and the rest, and the draw is whichever of `N_s` samples from the
-good density, with bandwidths widened by `b_w`, has the highest ratio of good to bad
-density. `N_min` defaults to the number of hyperparameters plus one.
+trials, is uniform at random. Otherwise the `N` completed trials at the largest such level
+are split into the best `max(N_min, ⌊qN⌋)` and the rest, and the draw is whichever of `N_s`
+samples from the good density, with bandwidths widened by `b_w` except on `Nominal`, has
+the highest ratio of good to bad density. `N_min` defaults to the number of hyperparameters
+plus one, and anything lower throws an `ArgumentError`.
 """
 const BOHB = SuccessiveHalving{true,<:BOHBSampler}
 
