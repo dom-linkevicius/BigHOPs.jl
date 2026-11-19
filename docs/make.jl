@@ -2,6 +2,8 @@ using Documenter, DocumenterVitepress
 
 using BigHOPs
 
+cp(joinpath(@__DIR__, "benchmarks"), joinpath(@__DIR__, "src", "figures"); force=true)
+
 makedocs(;
     modules=[BigHOPs],
     authors="Domas Linkevicius",
@@ -14,6 +16,15 @@ makedocs(;
     ),
     pages=[
         "Home" => "index.md",
+        "Introduction" => "introduction.md",
+        "Getting Started" => "getting_started.md",
+        "Executors" => "executors.md",
+        "Samplers" => "samplers.md",
+        "Plotting" => "plotting.md",
+        "Benchmarks" => "benchmarks.md",
+        "Provenance" => "provenance.md",
+        "References" => "references.md",
+        "Contributing" => "contributing.md",
         "API" => "api.md",
     ],
     warnonly=true,
