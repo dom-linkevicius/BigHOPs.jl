@@ -10,7 +10,7 @@ makedocs(;
     format=DocumenterVitepress.MarkdownVitepress(
         repo="https://github.com/dom-linkevicius/BigHOPs.jl",
         devurl="dev",
-        deploy_url="dom-linkevicius.github.io/BigHOPs.jl",
+        deploy_url="https://dom-linkevicius.github.io/BigHOPs.jl",
     ),
     pages=[
         "Home" => "index.md",
