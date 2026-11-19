@@ -151,15 +151,18 @@ function _sample_l_prime(b::BOHBSampler, kde::BOHBKDE, levels)
     return x, k
 end
 
+function _get_model!(b::BOHBSampler, candidates, runs)
+    b.stale[] || return b.model[]
+    b.model[] = _bohb_model(b, candidates, runs)
+    b.stale[] = false
+    return b.model[]
+end
+
 function _sample_sh_inner(s::BOHB, candidates, runs, ::SHDecision{:draw})
     b = s.inner
     rand(b.rng) < b.ρ && return rand(b.rng, length(candidates))
     _fittable(b, length(candidates)) || return rand(b.rng, length(candidates))
-    if b.stale[]
-        b.model[] = _bohb_model(b, candidates, runs)
-        b.stale[] = false
-    end
-    model = b.model[]
+    model = _get_model!(b, candidates, runs)
     samples = [_sample_l_prime(b, model.good, model.levels) for _ in 1:b.N_s]
     # Paper takes l/g directly; HpBandSter floors both at 1e-32 to avoid dividing by zero.
     scores = [max(1e-32, _density(model.bad, model.levels, x, k)) / max(_density(model.good, model.levels, x, k), 1e-32)
