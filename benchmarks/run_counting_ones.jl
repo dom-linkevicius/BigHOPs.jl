@@ -1,10 +1,14 @@
-include("counting_ones.jl")
+using Distributed
+
+const WORKERS = parse(Int, get(ENV, "BIGHO_COUNTING_ONES_WORKERS", "1"))
+WORKERS > 1 && addprocs(WORKERS; exeflags="--project=$(@__DIR__)")
+@everywhere include($(joinpath(@__DIR__, "counting_ones.jl")))
 
 const REPEATS = parse(Int, get(ENV, "BIGHO_COUNTING_ONES_REPEATS", "50"))
 
 const RUNS = (
-    (ncat=32, ncont=32, samplers=(Random=1e6, Hyperband=1e4, DEHB=1e4)),
-    (ncat=8, ncont=8, samplers=(Random=1e4, Hyperband=1e4, DEHB=1e4)),
+    (ncat=32, ncont=32, samplers=(Random=1e6, Hyperband=1e4, DEHB=1e4, BOHB=1e4)),
+    (ncat=8, ncont=8, samplers=(Random=1e4, Hyperband=1e4, DEHB=1e4, BOHB=1e4)),
 )
 
 println("Counting Ones: per-iteration budget=$ITERATION_BUDGET, repeats=$REPEATS, results=$RESULTS_DIR")
