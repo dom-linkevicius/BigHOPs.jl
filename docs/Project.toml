@@ -1,0 +1,7 @@
+[deps]
+BigHOPs = "bd33d1ee-3653-4952-9991-ee0e1cdcfc3b"
+Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+DocumenterVitepress = "4710194d-e776-4893-9690-8d956a29c365"
+
+[sources]
+BigHOPs = {path = ".."}
