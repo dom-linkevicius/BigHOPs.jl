@@ -18,9 +18,9 @@ Plotting lives in an extension, so `summaryplot` additionally needs `CairoMakie`
 
 ### Executors
 The package implements three different executors, meant for different scenarios:
-- `Serial`, which runs the sampler sequentially, mostly for development and testing purposes
-- `Threaded`, which runs the sampler over the specified number of threads, meant for intermediate sized jobs
-- `DistributedQueue` meant for the biggest jobs, usually on a compute cluster, running the sampler over different processes (one function evaluation per spawned process), requiring the specification of how those processes should be created (e.g. each process should have 12 threads).
+- `Serial`, which runs the objective evaluations sequentially, mostly for development and testing purposes
+- `Threaded`, which runs the objective evaluations over the specified number of threads, meant for intermediate sized jobs
+- `DistributedQueue` meant for the biggest jobs, usually on a compute cluster, running the objective evaluations over different processes (one function evaluation per spawned process), requiring the specification of how those processes should be created (e.g. each process should have 12 threads).
 
 ### Samplers
 The package currently implements the following samplers:
@@ -50,17 +50,17 @@ using BigHOPs
 using DataFrames: DataFrame
 using Random
 
-# The objective receives all hyperparameters as one NamedTuple `p` -- the sampler's
-# resource level is `p.r`. Bigger `p.r` means more noisy samples averaged together, so the
+# The objective receives all hyperparameters as one NamedTuple `x` -- the sampler's
+# resource level is `x.r`. Bigger `x.r` means more noisy samples averaged together, so the
 # estimate sharpens as more resource is spent. Wrapped in `Stateful`, so a trial promoted to
-# a higher `p.r` only pays for the *extra* samples, continuing from `pre_artefact` instead of
+# a higher `x.r` only pays for the *extra* samples, continuing from `pre_artefact` instead of
 # restarting from scratch.
-function noisy_bowl(p; pre_artefact=nothing)
-    p.x > 4.5 && error("simulated failure for x > 4.5 -- BigHOPs marks this a Failed trial and keeps going")
+function noisy_bowl(x; pre_artefact=nothing)
+    x.a > 4.5 && error("simulated failure for a > 4.5 -- BigHOPs marks this a Failed trial and keeps going")
     n_done, total = pre_artefact === nothing ? (0, 0.0) : pre_artefact
-    centre = p.kernel == "rbf" ? 3.0 : -1.0
-    loss = p.act(p.x - centre)^2 + (log10(p.lr) + 2.5)^2 + (p.degree - 3)^2
-    n_new = p.r - n_done
+    centre = x.kernel == "rbf" ? 3.0 : -1.0
+    loss = x.act(x.a - centre)^2 + (log10(x.lr) + 2.5)^2 + (x.degree - 3)^2
+    n_new = x.r - n_done
     total += sum(loss + 0.5randn() for _ in 1:n_new)
     n_done += n_new
     return total / n_done, (n_done, total)
@@ -69,7 +69,7 @@ end
 # `transform` must be a named function: checkpoints store functions by name, so an anonymous
 # `u -> 10.0^u` would not survive a reload.
 candidates = (
-    x=Continuous(-5.0, 5.0),                  # uniform over [-5, 5]
+    a=Continuous(-5.0, 5.0),                  # uniform over [-5, 5]
     lr=Continuous(-4, -1; transform=exp10),   # log-uniform over [1e-4, 1e-1]
     degree=Ordinal([1, 2, 3, 4, 5]),          # ordered, so 2 lies between 1 and 3
     kernel=Nominal(["rbf", "linear"]),        # unordered, no level is "between" any other
@@ -87,7 +87,16 @@ printmin(ho)     # best trial found so far
 DataFrame(ho)    # every trial (including any Failed ones), with its parameters and value
 
 using CairoMakie, AlgebraOfGraphics  # summaryplot needs both loaded to activate the extension
-summaryplot(ho; figure_kwargs=(; size=(800, 400)))  # figure_kwargs/axis_kwargs/scatter_kwargs/histogram_kwargs/line_kwargs all pass through
+# figure_kwargs/axis_kwargs/scatter_kwargs/histogram_kwargs/line_kwargs all pass through
+fig = summaryplot(ho; figure_kwargs=(; size=(1200, 600), fontsize=28),
+                  axis_kwargs=(; xticklabelsize=28, yticklabelsize=28, titlesize=22))
+for ax in fig.content  # thin out the ticks, leaving the categorical panels' labels alone
+    ax isa Axis || continue
+    ax.yticks = WilkinsonTicks(3)
+    if !(ax.xticks[] isa Tuple)
+        ax.xticks = WilkinsonTicks(3)
+    end
+end
 ```
 
 ![Sample summaryplot output](docs/sample_summaryplot.png)

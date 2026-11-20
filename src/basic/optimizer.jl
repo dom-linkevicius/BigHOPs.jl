@@ -39,7 +39,7 @@ end
 """
     Hyperoptimizer(objective, candidates::NamedTuple, sampler::SuccessiveHalving)
 
-Set up a search with `Hyperband`, `ASHA` or `DEHB`. The number of trials comes from the sampler's schedule, and `objective` receives the resource level as `p.r`, so `:r` cannot be a candidate name.
+Set up a search with `Hyperband`, `ASHA`, `DEHB` or `BOHB`. The number of trials comes from the sampler's schedule, and `objective` receives the resource level as `x.r`, so `:r` cannot be a candidate name.
 """
 function Hyperoptimizer(objective, candidates::NamedTuple, sampler::SuccessiveHalving)
     haskey(candidates, :r) &&
@@ -56,7 +56,7 @@ n_told(ho::Hyperoptimizer) = length(ho.runs) - ho.n_pending
 """
     settarget!(ho, n)
 
-Raise the trial target to `n`, e.g. to continue a finished run with `run!`. The target can only grow, and `FixedPlanSampler`s reject it.
+Raise the trial target to `n`, e.g. to continue a finished run with `run!`. The target can only grow, and `LHSampler` and the successive-halving samplers reject it.
 """
 function settarget!(ho::Hyperoptimizer, n::Int)
     ho.status == Errored &&

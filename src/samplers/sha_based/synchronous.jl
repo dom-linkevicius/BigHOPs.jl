@@ -7,7 +7,7 @@ Successive halving over brackets that start at resource levels from `r_min` up t
 each rung the best `1/η` of trials continue with `η` times the resource, and a rung must
 finish before any of its trials are promoted (Li et al., 2018,
 https://doi.org/10.48550/arXiv.1603.06560). `iterations` repeats the whole schedule, `inner`
-draws the starting configurations, and the objective receives the resource level as `p.r`.
+draws the starting configurations, and the objective receives the resource level as `x.r`.
 
 When every open bracket is waiting on results and the executor has spare capacity, the next
 bracket starts, from the next iteration if needed; earlier brackets keep priority for every

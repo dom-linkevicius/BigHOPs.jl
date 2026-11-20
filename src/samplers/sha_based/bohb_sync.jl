@@ -15,7 +15,8 @@ struct BOHBModel
 end
 
 """
-    BOHBSampler(; ρ=1/3, q=0.15, N_s=64, N_min=nothing, b_w=3, min_bandwidth=1e-3, rng=StableRNG(1))
+    BOHBSampler(; ρ=1/3, q=0.15, N_s=64, N_min=nothing, b_w=3, min_bandwidth=1e-3,
+                rng=StableRNG(1))
 
 The kernel-density sampler inside `BOHB`; construct `BOHB` rather than using this directly.
 """
