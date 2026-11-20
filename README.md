@@ -31,6 +31,7 @@ The package currently implements the following samplers:
 - `Hyperband`, which runs brackets of trials, using a different number of resources to train them and promoting best trials within a bracket, until the bracket reaches its resource limit
 - `ASHA`, which is the asynchronous version of Hyperband, also running brackets, but not requiring the completion of a bracket before trials are promoted
 - `DEHB`, a modified version of `Hyperband` where, after the first iteration, trials are not simply promoted between rungs but undergo differential evolution and can reach a better ceiling on larger search spaces
+- `BOHB`, a modified version of `Hyperband` where, once enough trials have completed, the first rung of each bracket is drawn from kernel density estimates of the best and the remaining trials rather than at random, while promotions are as in `Hyperband`
 - `GPSampler`, which models the objective as a Gaussian process, updated after every completed trial, and chooses each new trial from that model, for example by Thompson sampling (`ThompsonSampling`)
 
 ## Convenience functionality
@@ -109,7 +110,7 @@ With 8 binary and 8 continuous hyperparameters (`d = 16`), every sampler gets a 
 
 ![Stochastic Counting Ones, 16 dimensions](docs/benchmarks/counting_ones_16d_regret.png)
 
-With 32 binary and 32 continuous hyperparameters (`d = 64`), the cumulative budget / b_max varies by sampler — `RandomSampler` gets 10⁶, `Hyperband` and `DEHB` get 10⁴:
+With 32 binary and 32 continuous hyperparameters (`d = 64`), the cumulative budget / b_max varies by sampler — `RandomSampler` gets 10⁶, `Hyperband`, `DEHB` and `BOHB` get 10⁴:
 
 ![Stochastic Counting Ones](docs/benchmarks/counting_ones_64d_regret.png)
 
