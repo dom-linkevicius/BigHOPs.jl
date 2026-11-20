@@ -20,16 +20,14 @@ makedocs(;
     pages=[
         "Home" => "index.md",
         "Introduction" => "introduction.md",
-        "Sample Code" => "sample_code.md",
-        "Executors" => [
+        "Manual" => [
+            "Domains" => "domains.md",
+            "Samplers" => "samplers.md",
             "Executors" => "executors.md",
             "General functionalities" => "general_functionalities.md",
+            "Plotting" => "plotting.md",
         ],
-        "Samplers" => [
-            "Samplers" => "samplers.md",
-            "Benchmarks" => "benchmarks.md",
-        ],
-        "Plotting" => "plotting.md",
+        "Practical recommendations and benchmarks" => "benchmarks.md",
         "Contributing" => "contributing.md",
         "Provenance" => "provenance.md",
         "References" => "references.md",

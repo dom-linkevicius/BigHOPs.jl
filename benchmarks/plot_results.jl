@@ -58,7 +58,7 @@ function plot_results(runs, metadata)
         isempty(finite_lower) || (ymin = min(ymin, minimum(finite_lower)))
     end
 
-    fig = Figure(size=(750, 500))
+    fig = Figure(size=(750, 600), fontsize=18)
     legend_source = nothing
     for (row, ex_name, title_word) in ((1, :Serial, "Serial"), (2, :Threaded, "Threaded"))
         ax = Axis(fig[row, 1]; xlabel=(row == 2 ? "wall-clock time (s)" : ""),

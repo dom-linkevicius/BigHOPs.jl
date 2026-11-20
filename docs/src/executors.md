@@ -1,15 +1,13 @@
 # Executors
 
-Here we only describe the basic ideas behind the executors. For more details, including functionalities that apply to all of them, see [General functionalities](@ref).
-
-An executor decides how `run!` evaluates trials, while the sampler decides which hyperparameters each trial gets. Any sampler works with any executor, so the executor is chosen when the search is run:
+Executors are the workhorses of `BigHOPs.jl`, they specify how the individual trials are run, launch new ones when necessary. The executor has to be specified when `run!` is called on a `Hyperoptimizer`, with the conscious goal for flexibility and modularity, to be able to run any sampler with any executor:
 
 ```julia
-ho = Hyperoptimizer(objective, candidates; sampler=RandomSampler(), n=100)
+ho = Hyperoptimizer(f, domains; sampler=RandomSampler(), n=100)
 run!(ho; executor=Threaded())
 ```
 
-Pick the executor by where the trials run: `Serial` for development and debugging, `Threaded` for one machine, and `DistributedQueue` for clusters, or for trials that need a process of their own or a time limit. Checkpoint long runs, so that a crash does not lose the trials already evaluated; see [Saving and resuming](@ref).
+The choice of executor should be informed by the problem at hand. Pick `Serial` for development and debugging, `Threaded` for one machine with multiple cores and intermediate size problems, and `DistributedQueue` for clusters, or trials that need a process of their own or a time limit. Finally, see [General functionalities](@ref) for some additional convenience functionalities related to executors.
 
 ## Serial
 
@@ -17,7 +15,7 @@ Pick the executor by where the trials run: `Serial` for development and debuggin
 Serial
 ```
 
-It is the default for `run!`, and the simplest to debug. It also suits objectives that already use every core of the machine on their own.
+`Serial` is the default for `run!`. It is the simplest to debug, suits objectives that already use every core of the machine on their own.
 
 ## Threaded
 
@@ -25,7 +23,7 @@ It is the default for `run!`, and the simplest to debug. It also suits objective
 Threaded
 ```
 
-The trials share one Julia process, so the objective has to be safe to run concurrently with itself, for example by not writing to shared global state.
+The objectives evaluated using `Threaded` have to be safe to run many trials concurrently, for example by not writing to shared global state (`BigHOPs.jl` does not ensure this, therefore it is left for the user).
 
 ## DistributedQueue
 
@@ -33,13 +31,13 @@ The trials share one Julia process, so the objective has to be safe to run concu
 DistributedQueue
 ```
 
-Each worker is a fresh Julia process, so the objective has to be defined there too. A convenient pattern is to keep it in its own file and include that file both locally and in `setup_worker`:
+Each worker is a fresh Julia process, so the objective has to be defined there. A convenient pattern is to keep it in its own file and include that file both locally and in `setup_worker`:
 
 ```julia
 using Distributed
 using BigHOPs
 
-include("objective.jl")  # defines `objective(p)`
+include("objective.jl")  # defines `f(x)`
 
 spawn_worker() = first(addprocs(1; exeflags="--threads=12"))
 function setup_worker(pid)
@@ -47,6 +45,8 @@ function setup_worker(pid)
     return nothing
 end
 
-ho = Hyperoptimizer(objective, candidates; sampler=SobolSampler(), n=200)
+ho = Hyperoptimizer(f, domains; sampler=SobolSampler(), n=200)
 run!(ho; executor=DistributedQueue(8; spawn_worker, setup_worker, max_single_runtime=3600))
 ```
+
+The option to spawn and kill processes instead of having one process with a large resource pool was due to various factors, e.g. trials freezing, processes dying and resources being unrecoverable, efficiency of resource usage in cases where initially a sampler can benefit from lots of processes, but only runs few at the end.

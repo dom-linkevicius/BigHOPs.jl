@@ -1,7 +1,8 @@
 @enum RunStatus Pending Completed Failed Abandoned TimedOut
 
 """
-    RunEntry(id, params::NamedTuple, unit_params, metadata=Dict{Symbol,Any}(); pre_artefact=nothing)
+    RunEntry(id, params::NamedTuple, unit_params, metadata=Dict{Symbol,Any}();
+             pre_artefact=nothing)
 
 One trial: its hyperparameters `params` and their unit-interval encoding `unit_params`, sampler `metadata`, `status` (`Pending`, `Completed`, `Failed`, `Abandoned` or `TimedOut`), `value`, `error`, and the `pre_artefact` and `post_artefact` of a `Stateful` objective.
 """
@@ -71,7 +72,7 @@ end
 """
     Stateful(f)
 
-Wrap an objective that carries state between trials: `f(p; pre_artefact)` returns `(value, post_artefact)`. When `Hyperband` or `ASHA` promote a trial to a higher resource level, the promoted trial gets the earlier `post_artefact` as its `pre_artefact`, so it can resume rather than restart; otherwise `pre_artefact` is `nothing`.
+Wrap an objective that carries state between trials: `f(x; pre_artefact)` returns `(value, post_artefact)`. When `Hyperband`, `ASHA` or `BOHB` promote a trial to a higher resource level, the promoted trial gets the earlier `post_artefact` as its `pre_artefact`, so it can resume rather than restart; otherwise `pre_artefact` is `nothing`.
 """
 struct Stateful{F}
     f::F

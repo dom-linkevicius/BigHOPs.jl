@@ -1,101 +1,140 @@
 # Samplers
 
-A sampler decides which hyperparameters each trial gets. BigHOPs.jl has two kinds:
+Equipped with the domains defined in [Domains](@ref), we now present the machinery of how the next candidate is selected in `BigHOPs.jl`. Selection of the next candidate $x_{n+1}$ is handled by a sampler $\mathcal{S}$, which, depending on the sampler, may depend on the previous $x_1, \dots, x_n$ candidates or not. 
 
-- **Full-budget samplers** evaluate every trial once, at full cost. They are given the number of trials up front: `Hyperoptimizer(objective, candidates; sampler=..., n=...)`.
-- **Successive-halving samplers** start many trials on a small resource (epochs, samples, iterations) and give more only to the best ones. The number of trials comes from their schedule: `Hyperoptimizer(objective, candidates, sampler)`.
+One way the samplers in `BigHOPs.jl` can be divided is by whether they evaluate the objective `f` at the full resource or not:
+- **Full-resource samplers** evaluate `f` once, at the full resource (e.g. all training epochs), with the number of evaluations specified upfront. 
+- **Successive-halving samplers** start (potentially many) trials at a small resource and promote only some fraction of the best trials at that resource level to the next stage, where they are evaluated with more resource. 
 
-Every sampler is seeded by default, so repeating a search proposes the same trials.
+Another way to divide the samplers is by whether the sampler is adaptive, i.e. whether previous candidates inform the candidates sampled in the future. Therefore, we group the samplers into a $2 \times 2$ matrix by these two features:
 
-## Full-budget samplers
+|                        | Non-adaptive                                 | Adaptive         |
+|:-----------------------|:---------------------------------------------|:-----------------|
+| **Full-resource**      | `RandomSampler`, `LHSampler`, `SobolSampler` | `GPSampler`      |
+| **Successive-halving** | `Hyperband`, `ASHA`                          | `DEHB`, `BOHB`   |
 
-### RandomSampler
+For reproducibility (in so far as it is possible under things like schedulers and differing resource contention at different reruns) each sampler has a default seed, which can be changed.
 
-```julia
-RandomSampler(rng=StableRNG(1))
+## Full-resource samplers
+
+The number of objective evaluations for each full-resource sampler is specified by setting `n` when creating a `Hyperoptimizer`.
+
+### Full-resource non-adaptive samplers
+
+#### RandomSampler
+
+```@docs; canonical=false
+RandomSampler
 ```
 
-Draws each trial's hyperparameters independently at random. It is the simplest baseline, and also the default inner sampler of `Hyperband` and `ASHA`.
+The simplest baseline, and also the default inner sampler of `Hyperband` and `ASHA`.
 
-### LHSampler
+#### LHSampler
 
-```julia
-LHSampler(; rng=StableRNG(1))
+```@docs; canonical=false
+LHSampler
 ```
 
-Draws all `n` trials up front as a Latin hypercube, which spreads them evenly along every hyperparameter. It warns if `n` is too small to cover every combination of discrete values. Each `LHSampler()` can back only one `Hyperoptimizer`.
+Uses the `QuasiMonteCarlo.jl` implementation.
 
-### SobolSampler
+#### SobolSampler
 
-```julia
-SobolSampler(; rng=StableRNG(1))
+```@docs; canonical=false
+SobolSampler
 ```
 
-Takes each trial as the next point of a Sobol sequence, shifted by one random offset, so successive trials spread over the space more evenly than independent random draws. Unlike `LHSampler`, it needs no fixed number of trials; after any power-of-2 number of trials, each hyperparameter's range is covered evenly.
+Uses the `Sobol.jl` implementation.
 
-### GPSampler
+### Full-resource adaptive samplers
 
-```julia
-GPSampler(gp; next_point, noise, n_initial, initial=SobolSampler(), fit_hyperparams=nothing,
-          standardize=BigHOPs.zscore, strict_initialization=true, rng=StableRNG(1))
+#### GPSampler
+
+```@docs; canonical=false
+GPSampler
 ```
 
-Models the objective as a Gaussian process over the hyperparameters. The first `n_initial` trials come from `initial`; after that, the GP is conditioned on every completed trial, and `next_point` chooses each new trial from the posterior. `ThompsonSampling(n_candidates; jitter)` [Kandasamy2018](@cite) is the provided `next_point`: it draws the posterior at `n_candidates` Sobol points and returns the one where the draw is lowest.
+`ThompsonSampling(n_candidates; jitter)` [Kandasamy2018](@cite) is the provided `next_point`: it draws the posterior at `n_candidates` Sobol points and returns the one where the draw is lowest.
 
 ```julia
 using AbstractGPs
 
 sampler = GPSampler(GP(Matern52Kernel()); next_point=ThompsonSampling(512; jitter=1e-6),
                     noise=1e-6, n_initial=10)
-ho = Hyperoptimizer(objective, candidates; sampler, n=50)
+ho = Hyperoptimizer(f, domains; sampler, n=50)
 ```
-
-`fit_hyperparams(X, y)` can refit the kernel's hyperparameters, and optionally the noise, before each conditioning. See the [API](api.md) for the remaining options.
 
 ## Successive-halving samplers
 
-These samplers need an objective with a resource knob: the objective receives the resource level as `p.r`, and a larger `p.r` should mean a more expensive but more accurate evaluation, such as more training epochs. They share one schedule:
+Successive halving as a hyperparameter optimization strategy was first introduced in [Jamieson2016](@citet), as a single bracket of rungs. [Li2018](@citet) extended it to hedge your bets given some budget, setting up a series of brackets split into rungs, where each successive rung evaluates the objective `f` with a progressively larger resource. With the total budget being approximately equal between brackets, the first bracket is the most aggressive, evaluating the objective many times with just enough resource, such that the good candidates would be distinguishable from the bad ones. The best fraction of the candidates is then promoted to the next rung and trained with a larger resource. The second bracket starts off with a higher minimal resource, following the same procedure, until the last bracket, where a few objective evaluations are made at the full resource. 
 
-- `R` is the largest resource level, given to the trials that survive every round;
-- `r_min` is the smallest resource level, where the most aggressive bracket starts;
-- `η` is the factor between rounds: after each round, the best `1/η` of the trials continue with `η` times the resource;
-- `iterations` repeats the whole schedule.
+The computation given to a single evaluation of `f` is formalized via the notion of resource $r$ -- training epochs, amount of data, etc., whatever the problem context dictates. Other parameters used to set up the schedule for the brackets and the promotions are:
 
-A bracket starts some number of trials at one resource level and halves its way up to `R`, and the schedule runs several brackets, from aggressive (many trials, starting at `r_min`) to conservative (a few trials, all at `R`).
+- ``R`` -- the largest resource level, given to the trials that survive every round;
+- ``r_{min}`` -- the smallest resource level, where the most aggressive bracket starts;
+- ``\eta`` -- the factor between rounds, after each round, the best $1/\eta$ of the trials continue with $\eta$ times the resource;
+- ``k`` -- repeat the whole schedule that many times.
 
-When a trial is promoted to a higher resource level, it does not have to start again from scratch: with a `Stateful` objective, `Hyperband`, `ASHA` and `BOHB` pass it the earlier trial's state, so training can continue where it stopped, while `DEHB` trains every trial from scratch. See [Stateful objectives](@ref).
+The number of brackets, rungs and trials follows [Li2018](@citet) definitions. With $s_{max} = \lfloor \log_\eta(R / r_{min}) \rfloor$, there are $s_{max} + 1$ brackets, indexed by $s = s_{max}, \dots, 0$ from the most to the least aggressive. Bracket $s$ has $s + 1$ rungs, and its first rung starts
 
-### Hyperband
-
-```julia
-Hyperband(; R, η=3, r_min=1, iterations=1, inner=RandomSampler())
+```math
+n_s = \left\lceil \frac{s_{max} + 1}{s + 1} \, \eta^s \right\rceil
 ```
 
-Successive halving as in [Li2018](@citet): a rung must finish before any of its trials are promoted. `inner` draws the starting configurations, at random by default. When every open bracket is waiting on results and the executor has spare capacity, the next bracket starts.
+trials at resource $r_s = r_{min} \eta^{s_{max} - s}$. Rung $i = 1, \dots, s + 1$ then runs $\lfloor n_s \eta^{-(i-1)} \rfloor$ trials at resource $r_s \eta^{i-1}$, so every bracket ends at $r_{min} \eta^{s_{max}}$. This equals $R$ only when $R / r_{min}$ is a power of $\eta$; otherwise a warning says how far short it falls. With $k$ repetitions, every bracket runs $k$ times.
 
-### ASHA
+Taking a specific example where $R=9$, $r_{min}=1$, $\eta=3$, we get $s_{max} = 2$ and three brackets:
 
-```julia
-ASHA(; R, η=3, r_min=1, iterations=1, inner=RandomSampler())
+| Bracket | Rung 1              | Rung 2              | Rung 3             |
+|:--------|:--------------------|:--------------------|:-------------------|
+| $s = 2$ | 9 trials at $r = 1$ | 3 trials at $r = 3$ | 1 trial at $r = 9$ |
+| $s = 1$ | 5 trials at $r = 3$ | 1 trial at $r = 9$  |                    |
+| $s = 0$ | 3 trials at $r = 9$ |                     |                    |
+
+If every trial starts from scratch, the brackets spend a budget of $27$, $24$ and $27$. This information is also printed whenever a `Hyperoptimizer` is displayed:
+
+```julia-repl
+julia> ho = Hyperoptimizer(f, (x=Continuous(0, 1),), Hyperband(; R=9, η=3, r_min=1))
+Hyperoptimizer with
+  x [0.0, 1.0]
+  resource levels: 1, 3, 9
+  trials per level: 9, 8, 5
+  total trials: 22
+  no completed trials yet
 ```
 
-Asynchronous `Hyperband` [Li2020](@cite), with the same schedule and arguments: a trial is promoted as soon as it is among the best `1/η` completed so far in its rung, instead of waiting for the rung to finish. This keeps workers busy under `Threaded` or `DistributedQueue` when trial durations vary.
+Note that when a trial is promoted, it does not have to start from scratch. Using the `Stateful` wrapper over your objective allows `Hyperband`, `ASHA` and `BOHB` to continue training from where the trial finished in the previous rung, potentially saving a significant part of the budget, see [Stateful objectives](@ref).
 
-### DEHB
+!!! danger "`r` is reserved"
+    Successive-halving samplers pass the resource level to the objective as `x.r`, in the same `NamedTuple` as the hyperparameters, so `r` cannot be the name of a hyperparameter.
 
-```julia
-DEHB(; R, η=3, r_min=1, iterations=1, F=0.5, crossover=0.5, rng=StableRNG(1))
+Finally, contrary to the full-resource samplers, the number of objective evaluations of `f` is set by sampler's parameters, rather than `n`.
+
+### Successive-halving non-adaptive samplers
+
+#### Hyperband
+
+```@docs; canonical=false
+Hyperband
 ```
 
-`Hyperband`'s schedule with differential evolution in place of random draws [Awad2021](@cite). Each resource level keeps a subpopulation of configurations; new trials are mutated and crossed over from them, so later trials build on the ones that did well. `F` is the mutation factor and `crossover` the crossover probability. Every trial trains from scratch, so a `Stateful` objective never receives a `pre_artefact`.
+#### ASHA
 
-### BOHB
-
-```julia
-BOHB(; R, η=3, r_min=1, iterations=1, ρ=1/3, q=0.15, N_s=64, N_min=nothing, b_w=3,
-     min_bandwidth=1e-3, rng=StableRNG(1))
+```@docs; canonical=false
+ASHA
 ```
 
-`Hyperband`'s schedule with the first rung of each bracket drawn from kernel density estimates [Falkner2018](@cite), while promotions are as in `Hyperband`. Once a resource level has enough completed trials, they are split into the best ones and the rest, a density is fitted to each, and the next configuration is the one among `N_s` candidates that is most likely under the good density relative to the bad one. A fraction `ρ` of draws stays uniformly random, so the search keeps exploring.
+### Successive-halving adaptive samplers
 
-The model needs more completed trials as the number of hyperparameters `d` grows: by default `N_min = d + 1`, and both the good and the bad set need more than `d` trials, so a resource level gets a model only after about `2d + 2` trials there.
+#### DEHB
+
+```@docs; canonical=false
+DEHB
+```
+
+#### BOHB
+
+```@docs; canonical=false
+BOHB
+```
+
+The model needs more completed trials as the number of hyperparameters $d$ grows. By default the KDE machinery starts at about $2d + 2$ completed trials at a specific resource level. Both the good and the bad set need more than $d$ trials since a KDE fitted on fewer points in $d$ dimensions is not very informative.

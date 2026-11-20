@@ -33,9 +33,7 @@ const sidebarTemp = {
 }
 
 const sidebar = (sidebarTemp.sidebar as any).map((item: any) =>
-  ['Introduction', 'Sample Code', 'Plotting', 'Contributing', 'Provenance', 'References', 'API'].includes(item.text) ? { ...item, items: [] }
-  : item.items ? { ...item, collapsed: true }
-  : item
+  item.items ? { ...item, collapsed: true } : item
 )
 
 // https://vitepress.dev/reference/site-config
@@ -111,8 +109,8 @@ export default defineConfig({
       { icon: 'github', link: 'REPLACE_ME_DOCUMENTER_VITEPRESS' }
     ],
     footer: {
-      message: 'Made with <a href="https://luxdl.github.io/DocumenterVitepress.jl/dev/" target="_blank"><strong>DocumenterVitepress.jl</strong></a><br>',
-      copyright: `© Copyright ${new Date().getUTCFullYear()}.`
+      message: 'Made with <a href="https://documenter.juliadocs.org/stable/" target="_blank"><strong>Documenter.jl</strong></a>, <a href="https://juliadocs.org/DocumenterCitations.jl/stable/" target="_blank"><strong>DocumenterCitations.jl</strong></a>, <a href="https://vitepress.dev" target="_blank"><strong>VitePress</strong></a> and <a href="https://luxdl.github.io/DocumenterVitepress.jl/stable" target="_blank"><strong>DocumenterVitepress.jl</strong></a><br>Powered by the <a href="https://www.julialang.org" target="_blank">Julia Programming Language</a>.<br>',
+      copyright: `© Copyright ${new Date().getUTCFullYear()}. Released under the MIT License.`
     }
   }
 })
