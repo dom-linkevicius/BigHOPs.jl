@@ -1,6 +1,6 @@
 # Benchmarks
 
-The benchmarks run as Slurm array jobs on a cluster; the results are then downloaded and plotted locally.
+The benchmarks run as Slurm array jobs on a cluster; the results are then downloaded and plotted locally. Every command below is run from this `benchmarks/` folder.
 
 ```
 benchmarks/
@@ -15,12 +15,12 @@ benchmarks/
 
 ## Running on the cluster
 
-Get the repository onto the cluster with git, so the sbatch files keep Unix line endings, and make sure `julia` is on the `PATH` of the compute nodes. Then, from the repository root on a login node:
+Get the repository onto the cluster with git, so the sbatch files keep Unix line endings, and make sure `julia` is on the `PATH` of the compute nodes. Then, on a login node:
 
 ```sh
-julia --project=benchmarks benchmarks/submit.jl                 # repeats without a result yet
-julia --project=benchmarks benchmarks/submit.jl counting_ones   # delete this benchmark's results, rerun all of it
-julia --project=benchmarks benchmarks/submit.jl all             # delete all results, rerun everything
+julia --project=. submit.jl                 # repeats without a result yet
+julia --project=. submit.jl counting_ones   # delete this benchmark's results, rerun all of it
+julia --project=. submit.jl all             # delete all results, rerun everything
 ```
 
 `submit.jl` installs and precompiles the environment before submitting. The jobs inherit the environment of the shell they are submitted from, so set these variables before calling it:
@@ -34,17 +34,16 @@ Each benchmark's Slurm settings (CPUs, time limit, memory) are in its sbatch fil
 A single job can also be run by hand, e.g. the first counting ones job:
 
 ```sh
-cd benchmarks
 julia --project=. run_task.jl counting_ones 1
 ```
 
 ## Plotting
 
-Copy `benchmarks/results/` from the cluster into your local checkout, then:
+Copy `results/` from the cluster into your local checkout, then:
 
 ```sh
-julia --project=benchmarks benchmarks/benchmark_code/counting_ones/plot_counting_ones.jl
-julia --project=benchmarks benchmarks/benchmark_code/nn/plot_results.jl
+julia --project=. benchmark_code/counting_ones/plot_counting_ones.jl
+julia --project=. benchmark_code/nn/plot_results.jl
 ```
 
 The figures are written to `docs/src/figures/`.
