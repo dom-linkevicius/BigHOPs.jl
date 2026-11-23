@@ -63,11 +63,6 @@ end
 Continuous(min::Real, max::Real; transform=identity) =
     Continuous{typeof(transform)}(Float64(min), Float64(max), transform)
 
-"""
-    length(d::Union{Nominal,Ordinal})
-
-Number of choices in `d`.
-"""
 Base.length(d::Union{Nominal,Ordinal}) = length(d.values)
 
 """
