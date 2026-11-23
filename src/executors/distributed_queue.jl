@@ -44,12 +44,7 @@ function start!(executor::DistributedQueue, ho)
     return nothing
 end
 
-"""
-    shutdown!(executor::DistributedQueue)
-
-Remove the workers of trials still running, waiting up to `teardown_timeout` seconds for each, then wait for their tasks to finish.
-"""
-function shutdown!(executor::DistributedQueue)
+function shutdown!(executor::DistributedQueue; interrupt::Bool=false)
     err = nothing
     for (pid, t) in executor.tasks
         if !istaskdone(t)
@@ -146,8 +141,13 @@ function submit!(executor::DistributedQueue, entry::RunEntry, f)
         outcome = try
             executor.setup_worker(worker)
             _record_worker!(executor, entry, worker)
+            entry.metadata[:start_time] = now()
             future = Distributed.remotecall(safe_call, worker, f, entry.params, entry.pre_artefact)
-            _fetch_within(limit, future, worker, executor.teardown_timeout)
+            try
+                _fetch_within(limit, future, worker, executor.teardown_timeout)
+            finally
+                entry.metadata[:end_time] = now()
+            end
         catch e
             @warn "setup_worker() or objective errored" error = e
             e
@@ -170,9 +170,10 @@ function _take_one!(executor::DistributedQueue, out)
     return out
 end
 
-function poll(executor::DistributedQueue)
+function poll(executor::DistributedQueue, timeout::Real=Inf)
     executor.pending_exception !== nothing && throw(executor.pending_exception)
     executor.in_flight == 0 && return Tuple{RunEntry,Any}[]
+    isfinite(timeout) && timedwait(() -> isready(executor.results), timeout) === :timed_out && return Tuple{RunEntry,Any}[]
     out = _take_one!(executor, Tuple{RunEntry,Any}[])
     while executor.in_flight > 0 && isready(executor.results)
         _take_one!(executor, out)

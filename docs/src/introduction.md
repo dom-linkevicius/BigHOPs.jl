@@ -1,8 +1,17 @@
 # Introduction
 
-`BigHOPs.jl` is a hyperparameter optimization library meant to be used in situations where individual function evaluations are costly. It is geared to be modular, extensible, to play well with compute clusters, taking care of common functionality and use cases to make hyperparameter optimization as straightforward as possible. The package is still under development and some of the features or implementations may change.
+`BigHOPs.jl` is a hyperparameter optimization library meant to be used in situations where individual function evaluations are costly. It is geared to be modular, extensible, to play well with compute clusters, taking care of common functionality and use cases to make hyperparameter optimization as straightforward as possible.
 
-Briefly, the samplers and executors are decoupled, the sampler is the only object dictating how to sample the candidates and the executor is the only object dictating how objective evaluations should be done. This allows for different composition of executors and samplers, depending on the optimization problem and available resources. Having first defined a `Hyperoptimizer` with a sampler in it, call it `ho`, we then specify the executor at runtime, when calling `run!`. Internally, `run!` alternates between drawing candidates from the sampler and handing them to the executor, running the following procedure:
+!!! warning
+    The package is still under development and some of the features or implementations may change.
+
+Briefly, the samplers and executors are decoupled, the sampler is the only object dictating how to sample the candidates and the executor is the only object dictating how objective evaluations should be done. This allows for different composition of executors and samplers, depending on the optimization problem and available resources. Having first defined a `Hyperoptimizer` with a sampler in it, call it `ho`, we then specify the executor at runtime, when calling `run!`.
+
+```@docs; canonical=false
+run!
+```
+
+Internally, `run!` alternates between drawing candidates from the sampler and handing them to the executor, running the following procedure:
 
 ```text
 start the executor
@@ -18,7 +27,9 @@ until no more candidates will be drawn and no evaluation is running
 shut the executor down
 ```
 
-Note that a sampler can have no candidate ready while it waits on results. If you want to contribute to `BigHOPs.jl` or request a sampler, executor or other functionality see [Contributing](@ref). We next present a runnable sample code snippet, which you can use to get started, with each object and function explained in the [Manual](domains.md).
+Note that a sampler can have no candidate ready while it waits on results.
+
+If you want to contribute to `BigHOPs.jl` or request a sampler, executor or other functionality see [Contributing](@ref). We next present a runnable sample code snippet, which you can use to get started, with each object and function explained in the [Manual](domains.md).
 
 
 
@@ -66,9 +77,9 @@ printmin(ho)     # best trial found so far
 DataFrame(ho)    # every trial (including any Failed ones), with its parameters and value
 
 using CairoMakie, AlgebraOfGraphics  # summaryplot needs both loaded to activate the extension
-# figure_kwargs/axis_kwargs/scatter_kwargs/histogram_kwargs/line_kwargs all pass through
-fig = summaryplot(ho; figure_kwargs=(; size=(1200, 600), fontsize=28),
-                  axis_kwargs=(; xticklabelsize=28, yticklabelsize=28, titlesize=22))
+# figure/axis/scatter/histogram/line all pass through
+fig = summaryplot(ho; figure=(; size=(1200, 600), fontsize=28),
+                  axis=(; xticklabelsize=28, yticklabelsize=28, titlesize=22))
 for ax in fig.content  # thin out the ticks, leaving the categorical panels' labels alone
     ax isa Axis || continue
     ax.yticks = WilkinsonTicks(3)
@@ -77,3 +88,5 @@ for ax in fig.content  # thin out the ticks, leaving the categorical panels' lab
     end
 end
 ```
+
+![Sample summaryplot output](assets/summaryplot.png)

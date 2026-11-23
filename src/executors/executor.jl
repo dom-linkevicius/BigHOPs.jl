@@ -13,9 +13,10 @@ Reset the executor at the start of a `run!`.
 function start! end
 
 """
-    shutdown!(executor)
+    shutdown!(executor; interrupt=false)
 
-Wait for or clean up in-flight work at the end of a `run!`, including when it fails.
+Wait for or clean up in-flight work at the end of a `run!`, including when it fails. With
+`interrupt=true`, `run!` has abandoned the trials still running, so don't wait for them.
 """
 function shutdown! end
 
@@ -27,9 +28,10 @@ Hand `entry` to the executor to evaluate with objective `f`; its outcome comes b
 function submit! end
 
 """
-    poll(executor) -> Vector{Tuple{RunEntry,Any}}
+    poll(executor, timeout=Inf) -> Vector{Tuple{RunEntry,Any}}
 
-Return the `(entry, outcome)` pairs finished since the last call, waiting for at least one if any are still running.
+Return the `(entry, outcome)` pairs finished since the last call, waiting up to `timeout`
+seconds for at least one if any are still running.
 """
 function poll end
 

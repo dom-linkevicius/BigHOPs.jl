@@ -99,13 +99,13 @@ A `Stateful` objective is called as `f(x; pre_artefact)` and returns a tuple `(v
 
 `Hyperband`, `ASHA` and `BOHB` warn when the objective is not `Stateful`, since every promotion then starts over. `DEHB` trains every trial from scratch and never sets `pre_artefact`, so it warns when the objective is `Stateful`.
 
-Under `Serial` and `Threaded`, `pre_artefact` is the very object the earlier trial returned, so changing it in place, as `train!` does above, also changes what is stored for the earlier trial. Copy it first if the earlier state should be kept. Under `DistributedQueue`, each worker receives its own copy.
+Each trial receives its own copy of `pre_artefact`, so changing it in place, as `train!` does above, leaves what is stored for the earlier trial untouched.
 
 ### post_artefact
 
 Whatever a `Stateful` objective returns as `post_artefact` is stored with its trial, whichever sampler is used. With a full-resource sampler, this is a way to keep something from every trial, such as the trained model, its training curve or metrics of interest, without having to save it from inside the objective. The artefacts can be easily accessed by converting a `Hyperoptimizer` to a `DataFrame` (see below). Every `post_artefact` is kept in memory for the whole run and written to every checkpoint, so it should be small enough to keep one per trial, e.g. a model's parameters rather than a copy of its training data.
 
-## DataFrame of trials
+## `DataFrame` of trials
 
 After a hyperoptimization run is completed casting the `Hyperoptimizer` into a `DataFrame` is a convenient way to conduct downstream analysis. It can be done by calling `DataFrame(ho)` which has one row per trial, including failed and abandoned ones, with its status, hyperparameters, value, error, artefacts and metadata. The `status` column holds the trial's state, and for a `Failed` or `TimedOut` trial, the `error` column holds what went wrong: the exception, or whatever the objective returned instead of a number.
 

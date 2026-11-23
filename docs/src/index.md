@@ -53,8 +53,8 @@ domains = (a=Continuous(-5, 5), lr=Continuous(-4, -1; transform=exp10))
 ho = Hyperoptimizer(Stateful(f), domains, BOHB(R=27))
 run!(ho; executor=Threaded())
 printmin(ho)
-fig = summaryplot(ho; figure_kwargs=(; size=(1200, 600), fontsize=24),
-                  axis_kwargs=(; xticklabelsize=24, yticklabelsize=24))
+fig = summaryplot(ho; figure=(; size=(1200, 600), fontsize=24),
+                  axis=(; xticklabelsize=24, yticklabelsize=24))
 ```
 
 ![summaryplot of the quick example](assets/home_summaryplot.png)

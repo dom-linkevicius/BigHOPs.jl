@@ -2,6 +2,7 @@ using Test, Random, Logging, Distributed
 using StableRNGs: StableRNG
 using BigHOPs
 using DataFrames
+using Dates: now
 using CairoMakie
 using AlgebraOfGraphics
 using AbstractGPs

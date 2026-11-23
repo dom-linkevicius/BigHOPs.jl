@@ -10,6 +10,7 @@
     out = BigHOPs.poll(ex)
     @test length(out) == 1
     @test out[1][1].id == 1
+    @test out[1][1].metadata[:start_time] <= out[1][1].metadata[:end_time]
     @test BigHOPs.capacity(ex) == 1
     BigHOPs.shutdown!(ex)
 
@@ -33,4 +34,26 @@
     run!(ho_exact; executor=Serial())
     @test minimum(ho_exact) == 0
     @test minimizer(ho_exact) == [7, 3]
+
+    calls = Ref(0)
+    shared = [[1], [2]]
+    mutate_inputs(p) = (calls[] += 1; push!(p.v, 0); calls[] * length(p.v))
+    ho_copies = Hyperoptimizer(mutate_inputs, (v=Nominal(shared),); n=4)
+    run!(ho_copies; executor=Serial(), show_progress=false)
+    @test calls[] == 0
+    @test shared == [[1], [2]]
+    @test all(e -> e.value == 2, ho_copies.runs)
+
+    state = [0]
+    ex_copy = Serial()
+    BigHOPs.submit!(ex_copy, BigHOPs.RunEntry(1, (a=1,), Float64[]; pre_artefact=state), Stateful((p; pre_artefact) -> (push!(pre_artefact, 1); (1.0, pre_artefact))))
+    BigHOPs.poll(ex_copy)
+    @test state == [0]
+
+    ho_capped = Hyperoptimizer(_ -> (sleep(0.2); 1.0), (a=Nominal([1, 2]),); n=100)
+    @test_logs (:warn, r"Serial") run!(ho_capped; executor=Serial(), time_cap=1.0, interrupt=true, show_progress=false)
+    @test ho_capped.status == BigHOPs.Finished
+    @test 1 <= length(ho_capped.runs) < 100
+    @test all(e -> e.status == BigHOPs.Completed, ho_capped.runs)
+    @test_throws ArgumentError run!(ho_capped; time_cap=0)
 end

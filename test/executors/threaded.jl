@@ -33,6 +33,7 @@ BigHOPs.create_run_entry(::BuggySampler, ho, id, params, unit) = BigHOPs.RunEntr
     @test length(out) == 2
     @test BigHOPs.capacity(ex) == 2
     @test Set(e.id for (e, _) in out) == Set([1, 2])
+    @test all(e.metadata[:start_time] <= e.metadata[:end_time] for (e, _) in out)
     BigHOPs.shutdown!(ex)
 
     ex_batch = Threaded(4)
@@ -40,9 +41,9 @@ BigHOPs.create_run_entry(::BuggySampler, ho, id, params, unit) = BigHOPs.RunEntr
     entryA = BigHOPs.RunEntry(1, (a=1,), Float64[])
     entryB = BigHOPs.RunEntry(2, (a=2,), Float64[])
     entryC = BigHOPs.RunEntry(3, (a=3,), Float64[])
-    put!(ex_batch.results, (entryA, BigHOPs.ObjectiveOutcome(10, nothing)))
-    put!(ex_batch.results, (entryB, InterruptException()))
-    put!(ex_batch.results, (entryC, BigHOPs.ObjectiveOutcome(30, nothing)))
+    put!(ex_batch.results, (entryA, BigHOPs.ObjectiveOutcome(10, nothing), now(), now()))
+    put!(ex_batch.results, (entryB, InterruptException(), now(), now()))
+    put!(ex_batch.results, (entryC, BigHOPs.ObjectiveOutcome(30, nothing), now(), now()))
     ex_batch.in_flight = 3
     out_batch = BigHOPs.poll(ex_batch)
     @test Set(e.id for (e, _) in out_batch) == Set([1, 3])
@@ -52,10 +53,9 @@ BigHOPs.create_run_entry(::BuggySampler, ho, id, params, unit) = BigHOPs.RunEntr
 
     ex_shutdown = Threaded(4)
     BigHOPs.start!(ex_shutdown, nothing)
-    finished = Ref(false)
-    BigHOPs.submit!(ex_shutdown, BigHOPs.RunEntry(1, (a=1,), Float64[]), _ -> (sleep(0.3); finished[] = true; 1))
+    BigHOPs.submit!(ex_shutdown, BigHOPs.RunEntry(1, (a=1,), Float64[]), _ -> (sleep(0.3); 1))
     BigHOPs.shutdown!(ex_shutdown)
-    @test finished[]
+    @test isready(ex_shutdown.results)
 
     failed_task = @async throw(InterruptException())
     try
@@ -123,4 +123,34 @@ BigHOPs.create_run_entry(::BuggySampler, ho, id, params, unit) = BigHOPs.RunEntr
     ho_slow = Hyperoptimizer(_ -> (sleep(delay); 1.0), (a=Nominal(1:n_slow),); n=n_slow)
     elapsed = @elapsed run!(ho_slow; executor=Threaded(n_slow))
     @test elapsed < n_slow * delay / 2
+
+    calls = Ref(0)
+    shared = [[1], [2]]
+    mutate_inputs(p) = (calls[] += 1; push!(p.v, 0); calls[] * length(p.v))
+    ho_copies = Hyperoptimizer(mutate_inputs, (v=Nominal(shared),); n=4)
+    run!(ho_copies; executor=Threaded(2), show_progress=false)
+    @test calls[] == 0
+    @test shared == [[1], [2]]
+    @test all(e -> e.value == 2, ho_copies.runs)
+
+    state = [0]
+    ex_copy = Threaded(1)
+    BigHOPs.start!(ex_copy, nothing)
+    BigHOPs.submit!(ex_copy, BigHOPs.RunEntry(1, (a=1,), Float64[]; pre_artefact=state), Stateful((p; pre_artefact) -> (push!(pre_artefact, 1); (1.0, pre_artefact))))
+    BigHOPs.poll(ex_copy)
+    BigHOPs.shutdown!(ex_copy)
+    @test state == [0]
+
+    ho_wait = Hyperoptimizer(_ -> (sleep(2.0); 1.0), (a=Nominal([1, 2]),); n=100)
+    run!(ho_wait; executor=Threaded(2), time_cap=1.0, show_progress=false)
+    @test ho_wait.status == BigHOPs.Finished
+    @test length(ho_wait.runs) == 2
+    @test all(e -> e.status == BigHOPs.Completed, ho_wait.runs)
+
+    ho_cut = Hyperoptimizer(_ -> (sleep(5.0); 1.0), (a=Nominal([1, 2]),); n=100)
+    elapsed_cut = @elapsed @test_logs (:warn, r"Threaded") run!(ho_cut; executor=Threaded(2), time_cap=1.0, interrupt=true, show_progress=false)
+    @test elapsed_cut < 4.0
+    @test ho_cut.status == BigHOPs.Finished
+    @test ho_cut.n_pending == 0
+    @test count(e -> e.status == BigHOPs.Abandoned, ho_cut.runs) == 2
 end

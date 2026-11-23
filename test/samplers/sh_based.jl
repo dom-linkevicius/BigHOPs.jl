@@ -46,7 +46,7 @@ end
     @info "Testing Hyperband/ASHA warm-start (pre_artefact/post_artefact) correctness"
 
     for sampler in (Hyperband(R=27, η=3, r_min=1), ASHA(R=27, η=3, r_min=1))
-        call_id = Ref(0)
+        global call_id = Ref(0)
         function stateful_obj(p; pre_artefact=nothing)
             call_id[] += 1
             resumed_from = pre_artefact === nothing ? nothing : pre_artefact[1]

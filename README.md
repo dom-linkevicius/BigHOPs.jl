@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/dom-linkevicius/BigHOPs.jl/actions/workflows/ci.yml/badge.svg?branch=master)](https://github.com/dom-linkevicius/BigHOPs.jl/actions/workflows/ci.yml?query=branch%3Amaster)
 [![codecov](https://codecov.io/gh/dom-linkevicius/BigHOPs.jl/graph/badge.svg)](https://codecov.io/gh/dom-linkevicius/BigHOPs.jl)
+[![docs](https://img.shields.io/badge/docs-dev-blue.svg)](https://dom-linkevicius.github.io/BigHOPs.jl/dev/)
 
 ## Introduction
 
@@ -87,9 +88,9 @@ printmin(ho)     # best trial found so far
 DataFrame(ho)    # every trial (including any Failed ones), with its parameters and value
 
 using CairoMakie, AlgebraOfGraphics  # summaryplot needs both loaded to activate the extension
-# figure_kwargs/axis_kwargs/scatter_kwargs/histogram_kwargs/line_kwargs all pass through
-fig = summaryplot(ho; figure_kwargs=(; size=(1200, 600), fontsize=28),
-                  axis_kwargs=(; xticklabelsize=28, yticklabelsize=28, titlesize=22))
+# figure/axis/scatter/histogram/line all pass through
+fig = summaryplot(ho; figure=(; size=(1200, 600), fontsize=28),
+                  axis=(; xticklabelsize=28, yticklabelsize=28, titlesize=22))
 for ax in fig.content  # thin out the ticks, leaving the categorical panels' labels alone
     ax isa Axis || continue
     ax.yticks = WilkinsonTicks(3)
@@ -99,7 +100,7 @@ for ax in fig.content  # thin out the ticks, leaving the categorical panels' lab
 end
 ```
 
-![Sample summaryplot output](docs/sample_summaryplot.png)
+![Sample summaryplot output](docs/src/assets/summaryplot.png)
 
 ## Internal benchmarking
 
@@ -117,11 +118,11 @@ Each sampler is run 50 times.
 
 With 8 binary and 8 continuous hyperparameters (`d = 16`), every sampler gets a cumulative budget / b_max of 10⁴:
 
-![Stochastic Counting Ones, 16 dimensions](docs/benchmarks/counting_ones_16d_regret.png)
+![Stochastic Counting Ones, 16 dimensions](docs/src/figures/counting_ones_16d_regret.png)
 
 With 32 binary and 32 continuous hyperparameters (`d = 64`), the cumulative budget / b_max varies by sampler — `RandomSampler` gets 10⁶, `Hyperband`, `DEHB` and `BOHB` get 10⁴:
 
-![Stochastic Counting Ones](docs/benchmarks/counting_ones_64d_regret.png)
+![Stochastic Counting Ones](docs/src/figures/counting_ones_64d_regret.png)
 
 These figures qualitatively reproduce Figure 3 from Falkner et al. (2018) and Figure 6 from Awad et al. (2021) respectively. They test two different cases, one with a smaller number of hyperparameters and one with a larger, showcasing the behaviour of the samplers in different settings.
 
@@ -141,7 +142,7 @@ The comparison is set up as "same budget, who gets there first":
 
 "Regret" is a run's best-validation-loss-so-far minus the best loss seen across every run in the benchmark, since the true optimum of this problem is not known analytically.
 
-![Wall-clock regret comparison](docs/benchmarks/wallclock_regret_comparison.png)
+![Wall-clock regret comparison](docs/src/figures/wallclock_regret_comparison.png)
 
 <!-- What the figure shows:
 - The successive halving-based samplers reach any given regret level sooner than the full-budget samplers at equal total budget, and they do so at every point in the run, in both executors. Cheap early rungs let them discard bad configurations before paying full price for them.

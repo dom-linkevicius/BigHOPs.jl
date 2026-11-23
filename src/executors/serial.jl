@@ -9,14 +9,17 @@ end
 Serial() = Serial(Tuple{RunEntry,Any}[])
 
 start!(::Serial, ho) = nothing
-shutdown!(::Serial) = nothing
+shutdown!(::Serial; interrupt::Bool=false) = nothing
 
 function submit!(executor::Serial, entry::RunEntry, f)
-    push!(executor.buffer, (entry, safe_call(f, entry.params, entry.pre_artefact)))
+    entry.metadata[:start_time] = now()
+    outcome = safe_call(deepcopy(f), deepcopy(entry.params), deepcopy(entry.pre_artefact))
+    entry.metadata[:end_time] = now()
+    push!(executor.buffer, (entry, outcome))
     return nothing
 end
 
-function poll(executor::Serial)
+function poll(executor::Serial, timeout::Real=Inf)
     out = copy(executor.buffer)
     empty!(executor.buffer)
     return out

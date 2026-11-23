@@ -346,6 +346,7 @@ end
         run!(ho; executor=meta_queue(() -> (tag=42,)), show_progress=false)
         recorded = ho.runs[1].metadata[:worker]
         @test ho.runs[1].status == BigHOPs.Completed
+        @test ho.runs[1].metadata[:start_time] <= ho.runs[1].metadata[:end_time]
         @test keys(recorded) == (:worker, :started, :host, :os_pid, :tag)
         @test all(v -> v isa String, values(recorded))
         @test recorded.worker == string(only(meta_spawned))
