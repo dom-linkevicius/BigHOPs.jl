@@ -12,7 +12,7 @@
     @test all(df.error .=== nothing)
     @test all(df.pre_artefact .=== nothing)
     @test all(df.post_artefact .=== nothing)
-    @test all(isempty, df.metadata)
+    @test all(m -> issetequal(keys(m), (:start_time, :end_time)), df.metadata)
 
     let n_calls = Ref(0)
         global dataframe_nan_after_first(p) = (n_calls[] += 1; n_calls[] == 1 ? p.a : NaN)
