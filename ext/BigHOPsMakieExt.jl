@@ -53,22 +53,23 @@ function _draw_running_min!(fig, row, col, completed; axis_kwargs, line_kwargs)
     return nothing
 end
 
-function BigHOPs.summaryplot(ho::BigHOPs.Hyperoptimizer; figure_kwargs=NamedTuple(), axis_kwargs=NamedTuple(),
-                            scatter_kwargs=NamedTuple(), histogram_kwargs=NamedTuple(), line_kwargs=NamedTuple())
+function BigHOPs.summaryplot(ho::BigHOPs.Hyperoptimizer; figure=NamedTuple(), axis=NamedTuple(),
+                            scatter=NamedTuple(), histogram=NamedTuple(), line=NamedTuple())
     isempty(ho.completed) &&
         error("summaryplot: this Hyperoptimizer has no completed trials")
     completed = sort(BigHOPs.DataFrames.DataFrame(ho)[ho.completed, :], :id)
 
-    panels = Any[(fig, row, col) -> _draw_marginal_scatter!(fig, row, col, completed, p; axis_kwargs, scatter_kwargs, histogram_kwargs) for p in ho.params]
-    push!(panels, (fig, row, col) -> _draw_value_over_id!(fig, row, col, completed; axis_kwargs, scatter_kwargs))
-    push!(panels, (fig, row, col) -> _draw_running_min!(fig, row, col, completed; axis_kwargs, line_kwargs))
+    panels = Any[(fig, row, col) -> _draw_marginal_scatter!(fig, row, col, completed, p; axis_kwargs=axis, scatter_kwargs=scatter,
+                                                            histogram_kwargs=histogram) for p in ho.params]
+    push!(panels, (fig, row, col) -> _draw_value_over_id!(fig, row, col, completed; axis_kwargs=axis, scatter_kwargs=scatter))
+    push!(panels, (fig, row, col) -> _draw_running_min!(fig, row, col, completed; axis_kwargs=axis, line_kwargs=line))
 
     # As square as possible (e.g. 4 -> 2x2, 6 -> 2x3), rather than one long column.
     total = length(panels)
     nrows = max(1, floor(Int, sqrt(total)))
     ncols = cld(total, nrows)
 
-    fig = Figure(; size=(400 * ncols, 400 * nrows), figure_kwargs...)
+    fig = Figure(; size=(400 * ncols, 400 * nrows), figure...)
     for (i, panel) in enumerate(panels)
         row = (i - 1) ÷ ncols + 1
         col = (i - 1) % ncols + 1

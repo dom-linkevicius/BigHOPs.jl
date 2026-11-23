@@ -29,8 +29,8 @@ The figure is a grid of panels, as close to square as possible:
 
 With a successive-halving sampler, trials at every resource level are plotted together, so the low-resource trials add noisier values to every panel.
 
-The keyword arguments are passed on to the Makie calls: `figure_kwargs` to `Figure`, `axis_kwargs` to every `Axis`, `scatter_kwargs` to the scatter plots, `histogram_kwargs` to the histograms and `line_kwargs` to the running minimum. They take precedence over the defaults, e.g. for a larger figure with smaller markers:
+The keyword arguments are passed on to the Makie calls: `figure` to `Figure`, `axis` to every `Axis`, `scatter` to the scatter plots, `histogram` to the histograms and `line` to the running minimum. They take precedence over the defaults, e.g. for a larger figure with smaller markers:
 
 ```julia
-summaryplot(ho; figure_kwargs=(; size=(1600, 1200)), scatter_kwargs=(; markersize=5))
+summaryplot(ho; figure=(; size=(1600, 1200)), scatter=(; markersize=5))
 ```

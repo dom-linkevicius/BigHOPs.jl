@@ -87,9 +87,9 @@ printmin(ho)     # best trial found so far
 DataFrame(ho)    # every trial (including any Failed ones), with its parameters and value
 
 using CairoMakie, AlgebraOfGraphics  # summaryplot needs both loaded to activate the extension
-# figure_kwargs/axis_kwargs/scatter_kwargs/histogram_kwargs/line_kwargs all pass through
-fig = summaryplot(ho; figure_kwargs=(; size=(1200, 600), fontsize=28),
-                  axis_kwargs=(; xticklabelsize=28, yticklabelsize=28, titlesize=22))
+# figure/axis/scatter/histogram/line all pass through
+fig = summaryplot(ho; figure=(; size=(1200, 600), fontsize=28),
+                  axis=(; xticklabelsize=28, yticklabelsize=28, titlesize=22))
 for ax in fig.content  # thin out the ticks, leaving the categorical panels' labels alone
     ax isa Axis || continue
     ax.yticks = WilkinsonTicks(3)

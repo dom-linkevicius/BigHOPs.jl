@@ -15,15 +15,15 @@
     @test_throws ErrorException summaryplot(ho_empty)
 
     @test summaryplot(ho;
-        figure_kwargs=(; size=(500, 500)),
-        axis_kwargs=(; titlesize=10),
-        scatter_kwargs=(; color=:red),
-        histogram_kwargs=(; color=:orange),
-        line_kwargs=(; color=:green)) isa CairoMakie.Figure
+        figure=(; size=(500, 500)),
+        axis=(; titlesize=10),
+        scatter=(; color=:red),
+        histogram=(; color=:orange),
+        line=(; color=:green)) isa CairoMakie.Figure
 
     _axes(f) = filter(x -> x isa CairoMakie.Axis, f.content)
     @test all(ax -> ax.xticklabelsize[] == 9 && ax.yticklabelsize[] == 9, _axes(summaryplot(ho)))
-    overridden = summaryplot(ho; axis_kwargs=(; xticklabelsize=21, yticklabelsize=22))
+    overridden = summaryplot(ho; axis=(; xticklabelsize=21, yticklabelsize=22))
     @test all(ax -> ax.xticklabelsize[] == 21 && ax.yticklabelsize[] == 22, _axes(overridden))
 end
 
@@ -37,7 +37,7 @@ end
 
     @test eltype(DataFrame(ho).kernel) <: AbstractString
     @test summaryplot(ho) isa CairoMakie.Figure
-    @test summaryplot(ho; histogram_kwargs=(; color=:orange)) isa CairoMakie.Figure
+    @test summaryplot(ho; histogram=(; color=:orange)) isa CairoMakie.Figure
 
     ho_only_categorical = Hyperoptimizer(p -> p.kernel == "rbf" ? 0.0 : 1.0,
                                           (kernel=Nominal(["rbf", "linear"]),); n=6)
