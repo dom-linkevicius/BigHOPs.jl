@@ -124,18 +124,6 @@ end
 
 _should_stop_asking(ho::Hyperoptimizer) = reached_target(ho) || exhausted(ho.sampler, ho) || blocked(ho.sampler, ho)
 
-function _abandon_pending!(ho::Hyperoptimizer)
-    lock(ho.lock) do
-        for (i, entry) in enumerate(ho.runs)
-            if entry.status === Pending
-                ho.runs[i] = _with_result(entry, Abandoned, missing, entry.post_artefact)
-                ho.n_pending -= 1
-            end
-        end
-    end
-    return ho
-end
-
 """
     run!(ho; executor=Serial(), save_every=nothing, save_path=nothing, show_progress=true,
          time_cap=Inf, interrupt=false)
@@ -202,7 +190,9 @@ function run!(ho::Hyperoptimizer; executor::AbstractExecutor=Serial(),
         ho.status = Finished
         save_path !== nothing && save_hyperoptimizer(ho, save_path)
     catch e
-        _handle_run_error(e, ho)
+        ho.status = Errored
+        _abandon_pending!(ho)
+        rethrow(e)
     finally
         shutdown!(executor)
         progress !== nothing && ProgressMeter.finish!(progress)
@@ -210,8 +200,13 @@ function run!(ho::Hyperoptimizer; executor::AbstractExecutor=Serial(),
     return ho
 end
 
-function _handle_run_error(e, ho::Hyperoptimizer)
-    ho.status = Errored
-    _abandon_pending!(ho)
-    rethrow(e)
+function _abandon_pending!(ho::Hyperoptimizer)
+    lock(ho.lock) do
+        for (i, entry) in enumerate(ho.runs)
+            if entry.status === Pending
+                ho.runs[i] = _with_result(entry, Abandoned, missing, entry.post_artefact)
+                ho.n_pending -= 1
+            end
+        end
+    end
 end
