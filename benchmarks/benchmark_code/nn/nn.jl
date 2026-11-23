@@ -1,3 +1,4 @@
+using BigHOPs
 using Flux
 using MLDatasets: Titanic
 using DataFrames
@@ -8,7 +9,6 @@ using LinearAlgebra: BLAS
 
 BLAS.set_num_threads(1)
 
-const DEPLOY = get(ENV, "BIGHO_BENCHMARK_DEPLOY", "false") == "true"
 const R_MIN = DEPLOY ? 5 : 1
 const R_MAX = DEPLOY ? 1215 : 27
 const EPOCHS_PER_RESOURCE = DEPLOY ? 6 : 250
@@ -134,4 +134,90 @@ function _warmup_objective_stateful(p; pre_artefact=nothing)
     model, opt_state = pre_artefact === nothing ? _setup(p.n_dense_layers, p.hidden, p.activation, p.lr, p.reg) : pre_artefact[1:2]
     _train_epochs!(model, opt_state, 1)
     return _val_loss(model), (model, opt_state, p.r, time())
+end
+
+_log(msg) = (println(msg); flush(stdout))
+
+const CANDIDATES = (
+    lr=Continuous(-5, -1; transform=x -> 10.0^x),
+    n_dense_layers=Ordinal([1, 2, 3]),
+    hidden=Ordinal([8, 16, 32, 64]),
+    activation=Nominal([tanh, relu]),
+    reg=Continuous(-6, -1; transform=x -> 10.0^x),
+)
+
+const ETA = 3
+
+const N_TRIALS = DEPLOY ? BigHOPs._total_draws(R_MAX, R_MIN, ETA) : 4
+
+if DEPLOY
+    smax = BigHOPs._smax(R_MAX, R_MIN, ETA)
+    total_resource_units = sum(
+        BigHOPs._capacity(R_MAX, R_MIN, ETA, k, i) * (BigHOPs._resource(R_MAX, R_MIN, ETA, k, i) - (i > 1 ? BigHOPs._resource(R_MAX, R_MIN, ETA, k, i - 1) : 0))
+        for k in 1:(smax+1) for i in 1:BigHOPs._n_rungs(R_MAX, R_MIN, ETA, k)
+    )
+    hyperband_total_epochs = total_resource_units * EPOCHS_PER_RESOURCE
+    RANDOM_FULL_EPOCHS[] = round(Int, hyperband_total_epochs / N_TRIALS)
+    random_total_epochs = RANDOM_FULL_EPOCHS[] * N_TRIALS
+    _log("Matched Random/LHS per-trial epochs to Hyperband/ASHA's total budget: random_full_epochs=$(RANDOM_FULL_EPOCHS[]) random_total_epochs=$random_total_epochs hyperband_total_epochs=$hyperband_total_epochs")
+end
+
+const PLAIN_OBJ = Stateful(nn_objective)
+const SH_OBJ = Stateful(nn_objective_stateful)
+
+const EXECUTORS = (Threaded=Threaded(), Serial=Serial())
+
+const SHA_INNER = RandomSampler()
+
+const MAKE_HYPEROPTIMIZER = Dict(
+    "Random" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=RandomSampler(), n=N_TRIALS),
+    "LHS" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=LHSampler(), n=N_TRIALS),
+    "Sobol" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=SobolSampler(), n=N_TRIALS),
+    "Hyperband" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, Hyperband(R=R_MAX, η=ETA, r_min=R_MIN, inner=SHA_INNER)),
+    "ASHA" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, ASHA(R=R_MAX, η=ETA, r_min=R_MIN, inner=SHA_INNER)),
+    "DEHB" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, DEHB(R=R_MAX, η=ETA, r_min=R_MIN)),
+    "BOHB" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, BOHB(R=R_MAX, η=ETA, r_min=R_MIN)),
+)
+
+_log("Warming up (JIT compilation)...")
+const WARMUP_OBJ = Stateful(_warmup_objective)
+const WARMUP_SH_OBJ = Stateful(_warmup_objective_stateful)
+for executor in EXECUTORS, sampler in (RandomSampler(), LHSampler(), SobolSampler())
+    run!(Hyperoptimizer(WARMUP_OBJ, CANDIDATES; sampler=sampler, n=2); executor=executor, show_progress=false)
+end
+for sh_sampler in (Hyperband(R=1, η=3, r_min=1), ASHA(R=1, η=3, r_min=1), DEHB(R=3, η=3, r_min=1),
+                   BOHB(R=1, η=3, r_min=1, iterations=20))
+    run!(Hyperoptimizer(WARMUP_SH_OBJ, CANDIDATES, sh_sampler); executor=Serial(), show_progress=false)
+end
+
+_finished_at(entry) = entry.post_artefact[4]
+
+"""
+    _timed_results(ho, t0)
+"""
+function _timed_results(ho::Hyperoptimizer, t0::Float64)
+    completed = filter(e -> !ismissing(e.value), ho.runs)
+    pairs = [(_finished_at(e) - t0, e.value) for e in completed]
+    return sort(pairs; by=first)
+end
+
+function _running_min_curve(pairs)
+    times, values = first.(pairs), last.(pairs)
+    best = accumulate(min, values)
+    return times, best
+end
+
+function run_task(task)
+    (; sampler, executor, repeat) = task
+    metadata = (n_trials=N_TRIALS, r_max=R_MAX, deploy=DEPLOY, nthreads=Threads.nthreads(),
+                sha_inner_sampler=nameof(typeof(SHA_INNER)))
+    _log("repeat=$repeat sampler=$sampler executor=$executor -- starting")
+    ho = MAKE_HYPEROPTIMIZER[sampler]()
+    t0 = time()
+    run!(ho; executor=EXECUTORS[Symbol(executor)], show_progress=false)
+    pairs = _timed_results(ho, t0)
+    elapsed = time() - t0
+    best = isempty(pairs) ? NaN : minimum(last, pairs)
+    _log("repeat=$repeat sampler=$sampler executor=$executor -- done elapsed=$elapsed best=$best")
+    return (; metadata, curve=_running_min_curve(pairs))
 end

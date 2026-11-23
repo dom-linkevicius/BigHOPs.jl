@@ -2,11 +2,11 @@ using CairoMakie
 using JLD2
 using Statistics: median, quantile
 
-const RESULTS_DIR = joinpath(@__DIR__, "nn_results")
+const RESULTS_DIR = joinpath(@__DIR__, "..", "..", "results", "nn")
 
-results_path(name, ex_name) = joinpath(RESULTS_DIR, "$(name)_$(ex_name).jld2")
+results_dir(name, ex_name) = joinpath(RESULTS_DIR, "$(name)_$(ex_name)")
 
-const OUTDIR = joinpath(@__DIR__, "..", "docs", "src", "figures")
+const OUTDIR = joinpath(@__DIR__, "..", "..", "..", "docs", "src", "figures")
 mkpath(OUTDIR)
 
 const REGRET_GRID_POINTS = 40
@@ -86,13 +86,11 @@ function load_runs()
     runs = Dict{Tuple{String,Symbol},Vector{Tuple{Vector{Float64},Vector{Float64}}}}()
     metadata = nothing
     for name in SAMPLER_NAMES, ex_name in (:Serial, :Threaded)
-        isfile(results_path(name, ex_name)) || continue
-        JLD2.jldopen(results_path(name, ex_name), "r") do file
-            repeat_keys = sort(filter(startswith("repeat_"), collect(keys(file))); by=k -> parse(Int, k[8:end]))
-            isempty(repeat_keys) && return
-            metadata = file["metadata"]
-            runs[(name, ex_name)] = [file[k] for k in repeat_keys]
-        end
+        isdir(results_dir(name, ex_name)) || continue
+        paths = filter(endswith(".jld2"), readdir(results_dir(name, ex_name); join=true))
+        isempty(paths) && continue
+        metadata = JLD2.load(first(paths), "metadata")
+        runs[(name, ex_name)] = [JLD2.load(path, "curve") for path in paths]
     end
     return runs, metadata
 end

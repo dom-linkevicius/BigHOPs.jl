@@ -2,8 +2,8 @@ using CairoMakie
 using JLD2
 using Statistics: mean, std
 
-const RESULTS_DIR = joinpath(@__DIR__, "counting_ones_results")
-const OUTDIR = joinpath(@__DIR__, "..", "docs", "src", "figures")
+const RESULTS_DIR = joinpath(@__DIR__, "..", "..", "results", "counting_ones")
+const OUTDIR = joinpath(@__DIR__, "..", "..", "..", "docs", "src", "figures")
 const SAMPLER_COLORS = Dict("Random" => Makie.wong_colors()[1], "Hyperband" => Makie.wong_colors()[3], "DEHB" => Makie.wong_colors()[2],
                             "BOHB" => Makie.wong_colors()[4])
 
@@ -14,7 +14,7 @@ const PLOTS = (
 
 const GRID = exp10.(range(-2, 6; length=160))
 
-results_path(ncat, ncont, name) = joinpath(RESULTS_DIR, "counting_ones_$(ncat)cat_$(ncont)cont_$(name).jld2")
+results_dir(ncat, ncont, name) = joinpath(RESULTS_DIR, "counting_ones_$(ncat)cat_$(ncont)cont_$(name)")
 
 best_measured_regret(trials, d) = (accumulate(min, trials.value) .+ d) ./ d
 
@@ -67,14 +67,12 @@ function on_grid(budget, curve)
 end
 
 function load_curves(ncat, ncont, name; curve=incumbent_true_regret)
-    JLD2.jldopen(results_path(ncat, ncont, name), "r") do file
-        repeat_keys = sort(filter(startswith("repeat_"), collect(keys(file))); by=k -> parse(Int, k[8:end]))
-        rows = map(repeat_keys) do key
-            trials = file[key]
-            on_grid(cumsum(Float64.(trials.r)) ./ file["r_max"], curve(trials, ncat + ncont))
-        end
-        return permutedims(reduce(hcat, rows))
+    paths = filter(endswith(".jld2"), readdir(results_dir(ncat, ncont, name); join=true))
+    rows = map(paths) do path
+        trials, r_max = JLD2.load(path, "trials", "r_max")
+        on_grid(cumsum(Float64.(trials.r)) ./ r_max, curve(trials, ncat + ncont))
     end
+    return permutedims(reduce(hcat, rows))
 end
 
 columnwise(f, curves, bottom) = [any(isnan, c) ? NaN : max(f(c), bottom) for c in eachcol(curves)]
@@ -117,7 +115,7 @@ function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims)
 end
 
 for plot in PLOTS
-    if all(name -> isfile(results_path(plot.ncat, plot.ncont, name)), plot.samplers)
+    if all(name -> isdir(results_dir(plot.ncat, plot.ncont, name)), plot.samplers)
         plot_counting_ones(; plot...)
     else
         println("$(plot.ncat) + $(plot.ncont): skipped, not every sampler has results in $RESULTS_DIR")

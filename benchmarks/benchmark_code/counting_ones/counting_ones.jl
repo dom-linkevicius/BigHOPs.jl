@@ -1,16 +1,10 @@
 using BigHOPs
 using Distributions: Binomial
 using StableRNGs: StableRNG
-using JLD2
-using Distributed
 
 const R_MIN = 9
 const R_MAX = 729
 const ETA = 3
-
-const RESULTS_DIR = joinpath(@__DIR__, "counting_ones_results")
-
-results_path(ncat::Int, ncont::Int, name::String) = joinpath(RESULTS_DIR, "counting_ones_$(ncat)cat_$(ncont)cont_$(name).jld2")
 
 function counting_ones_candidates(ncat::Int, ncont::Int)
     cat_keys = Tuple(Symbol("cat$i") for i in 1:ncat)
@@ -67,33 +61,11 @@ function _run_repeat(name::String, target::Float64, repeat::Int, ncat::Int, ncon
     return _trials(ho, ncat + ncont), elapsed
 end
 
-function run_counting_ones(name::String, target::Float64; ncat::Int, ncont::Int, repeats::Int)
-    path = results_path(ncat, ncont, name)
-    mkpath(RESULTS_DIR)
-    if !isfile(path)
-        JLD2.jldopen(path, "w") do file
-            file["ncat"] = ncat
-            file["ncont"] = ncont
-            file["target"] = target
-            file["r_max"] = R_MAX
-        end
-    end
-    todo = [repeat for repeat in 1:repeats if !JLD2.jldopen(file -> haskey(file, "repeat_$repeat"), path, "r")]
-    pool = WorkerPool(workers())
-    write_lock = ReentrantLock()
-    @sync for repeat in todo
-        @async begin
-            trials, elapsed = remotecall_fetch(_run_repeat, pool, name, target, repeat, ncat, ncont)
-            lock(write_lock) do
-                JLD2.jldopen(path, "a+") do file
-                    file["repeat_$repeat"] = trials
-                end
-            end
-            println("$name repeat=$repeat  $(round(elapsed; digits=1))s  trials=$(length(trials.r))  " *
-                    "budget/b_max=$(round(sum(Float64, trials.r) / R_MAX; digits=1))  " *
-                    "best measured regret=$(round((minimum(trials.value) + ncat + ncont) / (ncat + ncont); digits=5))")
-            flush(stdout)
-        end
-    end
-    return nothing
+function run_task(task)
+    (; sampler, target, repeat, ncat, ncont) = task
+    trials, elapsed = _run_repeat(sampler, target, repeat, ncat, ncont)
+    println("$sampler repeat=$repeat  $(round(elapsed; digits=1))s  trials=$(length(trials.r))  " *
+            "budget/b_max=$(round(sum(Float64, trials.r) / R_MAX; digits=1))  " *
+            "best measured regret=$(round((minimum(trials.value) + ncat + ncont) / (ncat + ncont); digits=5))")
+    return (; ncat, ncont, target, r_max=R_MAX, trials)
 end
