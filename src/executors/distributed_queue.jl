@@ -1,7 +1,15 @@
 """
-    DistributedQueue(max_concurrency=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout=30, max_single_runtime=Inf, worker_metadata=Returns(NamedTuple()))
+    DistributedQueue(max_concurrency=Sys.CPU_THREADS; spawn_worker,
+                     setup_worker=Returns(nothing), teardown_timeout=30,
+                     max_single_runtime=Inf, worker_metadata=Returns(NamedTuple()))
 
 Evaluate each trial on its own freshly spawned Distributed worker, up to `max_concurrency` at a time, removing the worker when the trial returns. Suited to clusters, where `spawn_worker` can request a process from a scheduler.
+
+- `spawn_worker()`: start one worker and return its process id, e.g. `() -> first(addprocs(1))`.
+- `setup_worker(pid)`: prepare that worker before its trial, e.g. load packages and define the objective there.
+- `teardown_timeout`: seconds to wait when removing a worker.
+- `max_single_runtime`: seconds a trial's objective may run before its worker is killed and the trial marked `TimedOut`; the default `Inf` sets no limit. Also accepts a function of the trial's parameters, e.g. `x -> 30 + 20 * x.r` to scale with a successive-halving resource level; if it throws or returns a non-positive limit, that trial fails.
+- `worker_metadata()`: run on each trial's worker before its objective, returning a `NamedTuple` of extra details to record, e.g. `() -> (job = ENV["SLURM_JOB_ID"],)`. They are stored as text in the trial's `metadata[:worker]`, alongside the worker id, host, OS process id and start time; if it fails, the trial runs without them and the error is recorded as `metadata_recording_error`.
 """
 mutable struct DistributedQueue <: AbstractExecutor
     max_concurrency::Int
@@ -24,15 +32,6 @@ mutable struct DistributedQueue <: AbstractExecutor
         return new(max_concurrency, spawn_worker, setup_worker, teardown_timeout, max_single_runtime, worker_metadata, results, in_flight, pending_exception, tasks)
     end
 end
-"""
-    DistributedQueue(max_concurrency=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout=30, max_single_runtime=Inf, worker_metadata=Returns(NamedTuple()))
-
-- `spawn_worker()`: start one worker and return its process id, e.g. `() -> first(addprocs(1))`.
-- `setup_worker(pid)`: prepare that worker before its trial, e.g. load packages and define the objective there.
-- `teardown_timeout`: seconds to wait when removing a worker.
-- `max_single_runtime`: seconds a trial's objective may run before its worker is killed and the trial marked `TimedOut`; the default `Inf` sets no limit. Also accepts a function of the trial's parameters, e.g. `p -> 30 + 20 * p.r` to scale with a successive-halving resource level; if it throws or returns a non-positive limit, that trial fails.
-- `worker_metadata()`: run on each trial's worker before its objective, returning a `NamedTuple` of extra details to record, e.g. `() -> (job = ENV["SLURM_JOB_ID"],)`. They are stored as text in the trial's `metadata[:worker]`, alongside the worker id, host, OS process id and start time; if it fails, the trial runs without them and the error is recorded as `metadata_recording_error`.
-"""
 function DistributedQueue(max_concurrency::Int=Sys.CPU_THREADS; spawn_worker, setup_worker=Returns(nothing), teardown_timeout::Real=30, max_single_runtime=Inf, worker_metadata=Returns(NamedTuple()))
     return DistributedQueue(max_concurrency, spawn_worker, setup_worker, teardown_timeout, max_single_runtime, worker_metadata, Channel{Tuple{RunEntry,Any}}(Inf), 0, nothing, Tuple{Int,Task}[])
 end

@@ -42,13 +42,13 @@ function _draw_marginal_scatter!(fig, row, col, completed, p; axis_kwargs, scatt
 end
 
 function _draw_value_over_id!(fig, row, col, completed; axis_kwargs, scatter_kwargs)
-    ax = Axis(fig[row, col]; xlabel="id", ylabel="value", title="objective value over id", _TICKLABEL_DEFAULTS..., axis_kwargs...)
+    ax = Axis(fig[row, col]; xlabel="id", ylabel="value", title="obj. value over id", _TICKLABEL_DEFAULTS..., axis_kwargs...)
     draw!(ax, data(completed) * mapping(:id, :value) * visual(Scatter; scatter_kwargs...))
     return nothing
 end
 
 function _draw_running_min!(fig, row, col, completed; axis_kwargs, line_kwargs)
-    ax = Axis(fig[row, col]; xlabel="id", ylabel="best value so far", title="minimum over runs so far", _TICKLABEL_DEFAULTS..., axis_kwargs...)
+    ax = Axis(fig[row, col]; xlabel="id", ylabel="best value so far", title="min. over trials", _TICKLABEL_DEFAULTS..., axis_kwargs...)
     lines!(ax, completed.id, accumulate(min, completed.value); line_kwargs...)
     return nothing
 end
@@ -56,7 +56,7 @@ end
 function BigHOPs.summaryplot(ho::BigHOPs.Hyperoptimizer; figure_kwargs=NamedTuple(), axis_kwargs=NamedTuple(),
                             scatter_kwargs=NamedTuple(), histogram_kwargs=NamedTuple(), line_kwargs=NamedTuple())
     isempty(ho.completed) &&
-        error("summaryplot: this Hyperoptimizer has no completed runs")
+        error("summaryplot: this Hyperoptimizer has no completed trials")
     completed = sort(BigHOPs.DataFrames.DataFrame(ho)[ho.completed, :], :id)
 
     panels = Any[(fig, row, col) -> _draw_marginal_scatter!(fig, row, col, completed, p; axis_kwargs, scatter_kwargs, histogram_kwargs) for p in ho.params]

@@ -1,5 +1,7 @@
 """
-    GPSampler(gp; next_point, noise, n_initial, initial=SobolSampler(), fit_hyperparams=nothing, standardize=BigHOPs.zscore, strict_initialization=true, rng=StableRNG(1))
+    GPSampler(gp; next_point, noise, n_initial, initial=SobolSampler(),
+              fit_hyperparams=nothing, standardize=BigHOPs.zscore,
+              strict_initialization=true, rng=StableRNG(1))
 
 Model the objective as a Gaussian process over the unit-encoded hyperparameters and let `next_point` choose each new trial once the initial trials are done. From then on, the GP is conditioned on every `Completed` trial after each tell; during the initial trials it is not. `Nominal` hyperparameters enter the kernel through their ordered unit encoding.
 

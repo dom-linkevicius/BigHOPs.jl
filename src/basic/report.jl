@@ -12,7 +12,7 @@ Objective values of every completed trial, in the same order as `history(ho)`.
 """
 results(ho::Hyperoptimizer) = [ho.runs[i].value for i in ho.completed]
 
-_no_completed_runs_error(fname) = error("$fname is undefined: this Hyperoptimizer has no completed runs")
+_no_completed_runs_error(fname) = error("$fname is undefined: this Hyperoptimizer has no completed trials")
 
 """
     minimum(ho)
@@ -65,7 +65,7 @@ function Base.show(io::IO, ho::Hyperoptimizer)
     _show_optimum(io, ho, ho.best_min_id)
 end
 
-_show_optimum(io::IO, ho::Hyperoptimizer, ::Nothing) = println(io, "  no completed runs yet")
+_show_optimum(io::IO, ho::Hyperoptimizer, ::Nothing) = println(io, "  no completed trials yet")
 function _show_optimum(io::IO, ho::Hyperoptimizer, ::Int)
     println(io, "  minimum: $(minimum(ho))")
     println(io, "  minimizer:")

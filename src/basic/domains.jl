@@ -26,6 +26,7 @@ Nominal(levels::Int) = Nominal(Base.OneTo(levels))
     Ordinal(values::AbstractVector)
 
 An ordered set of choices. Numeric values must be sorted ascending; non-numeric values are taken in the order given, with a warning. `Ordinal(k)` is shorthand for the choices `1:k`.
+It is also the domain for integer hyperparameters, e.g. `Ordinal(1:10)`.
 """
 struct Ordinal{V<:AbstractVector} <: Domain
     values::V

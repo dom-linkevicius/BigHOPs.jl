@@ -9,7 +9,7 @@ const SAMPLER_COLORS = Dict("Random" => Makie.wong_colors()[1], "Hyperband" => M
 
 const PLOTS = (
     (ncat=32, ncont=32, samplers=("Random", "Hyperband", "DEHB", "BOHB"), xlims=(0.015, 1e6), ylims=(0.015, 0.5)),
-    (ncat=8, ncont=8, samplers=("Random", "Hyperband", "DEHB", "BOHB"), xlims=(1e-1, 1e4), ylims=(1e-3, 1e0)),
+    (ncat=8, ncont=8, samplers=("Random", "Hyperband", "DEHB", "BOHB"), xlims=(1e-1, 1e4), ylims=(1e-5, 1e0)),
 )
 
 const GRID = exp10.(range(-2, 6; length=160))
@@ -30,6 +30,28 @@ function incumbent_true_regret(trials, d)
     end
     return curve
 end
+
+function hpbandster_measured_regret(trials, d)
+    curve = Vector{Float64}(undef, length(trials.r))
+    incumbent_value, incumbent_r = Inf, 0
+    for i in eachindex(trials.r)
+        r = Int(trials.r[i])
+        if r >= incumbent_r && trials.value[i] < incumbent_value
+            incumbent_value, incumbent_r = trials.value[i], r
+        end
+        curve[i] = (incumbent_value + d) / d
+    end
+    return curve
+end
+
+const METRICS = (
+    (title="Falkner et al. (2018)", ylabel="immediate regret",
+     curves=Dict("Random" => incumbent_true_regret, "Hyperband" => incumbent_true_regret,
+                 "DEHB" => incumbent_true_regret, "BOHB" => incumbent_true_regret)),
+    (title="Awad et al. (2021)", ylabel="validation regret",
+     curves=Dict("Random" => hpbandster_measured_regret, "Hyperband" => hpbandster_measured_regret,
+                 "DEHB" => hpbandster_measured_regret, "BOHB" => hpbandster_measured_regret)),
+)
 
 function on_grid(budget, curve)
     out, j = fill(NaN, length(GRID)), 0
@@ -55,34 +77,39 @@ function load_curves(ncat, ncont, name; curve=incumbent_true_regret)
     end
 end
 
-columnwise(f, curves) = [any(isnan, c) || f(c) <= 0 ? NaN : f(c) for c in eachcol(curves)]
+columnwise(f, curves, bottom) = [any(isnan, c) ? NaN : max(f(c), bottom) for c in eachcol(curves)]
 
 standard_error(c) = std(c) / sqrt(length(c))
 
 function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims)
     decades = ylims === nothing ? nothing : floor(Int, log10(ylims[1])):ceil(Int, log10(ylims[2]))
-    fig = Figure(size=(750, 400))
-    ax = Axis(fig[1, 1]; xlabel="cumulative budget / b_max", ylabel="normalized regret",
-              xscale=log10, yscale=log10,
-              xticks=Makie.LogTicks(-2:6),
-              xminorticksvisible=true, xminorgridvisible=true,
-              xminorticks=[d * 10.0^e for e in -2:5 for d in 2:9],
-              yticks=decades === nothing ? Makie.automatic : Makie.LogTicks(decades), yminorticksvisible=true, yminorgridvisible=true,
-              yminorticks=decades === nothing ? IntervalsBetween(9) : [m * 10.0^e for e in decades for m in 2:9])
+    bottom = ylims === nothing ? floatmin(Float64) : ylims[1] / 10
+    fig = Figure(size=(1000, 450), fontsize=24, figure_padding=(16, 40, 16, 16))
     repeats = 0
-    for name in samplers
-        curves = load_curves(ncat, ncont, name)
-        repeats = size(curves, 1)
-        color = SAMPLER_COLORS[name]
-        lines!(ax, GRID, columnwise(mean, curves); label=name, color=color)
-        band!(ax, GRID, columnwise(c -> mean(c) - standard_error(c), curves), columnwise(c -> mean(c) + standard_error(c), curves); color=(color, 0.15))
+    for (column, metric) in enumerate(METRICS)
+        ax = Axis(fig[3, column]; title=metric.title, xlabel="cumulative budget / b_max", ylabel=metric.ylabel,
+                  xscale=log10, yscale=log10,
+                  xticks=Makie.LogTicks(-2:6),
+                  xminorticksvisible=true, xminorgridvisible=true,
+                  xminorticks=[d * 10.0^e for e in -2:5 for d in 2:9],
+                  yticks=decades === nothing ? Makie.automatic : Makie.LogTicks(decades), yminorticksvisible=true, yminorgridvisible=true,
+                  yminorticks=decades === nothing ? IntervalsBetween(9) : [m * 10.0^e for e in decades for m in 2:9])
+        for name in samplers
+            curves = load_curves(ncat, ncont, name; curve=metric.curves[name])
+            repeats = size(curves, 1)
+            color = SAMPLER_COLORS[name]
+            lines!(ax, GRID, columnwise(mean, curves, bottom); label=name, color=color)
+            band!(ax, GRID, columnwise(c -> mean(c) - standard_error(c), curves, bottom), columnwise(c -> mean(c) + standard_error(c), curves, bottom); color=(color, 0.15))
+        end
+        xlims!(ax, xlims...)
+        if ylims !== nothing
+            ylims!(ax, ylims...)
+        end
+        if column == 1
+            Legend(fig[2, 1:length(METRICS)], ax; orientation=:horizontal, framevisible=false)
+        end
     end
-    ax.title = "Stochastic Counting Ones, $ncat categorical + $ncont continuous ($repeats repeats)"
-    xlims!(ax, xlims...)
-    if ylims !== nothing
-        ylims!(ax, ylims...)
-    end
-    axislegend(ax; position=:lb)
+    Label(fig[1, :], "Stochastic Counting Ones, $ncat categorical + $ncont continuous ($repeats repeats)"; font=:bold, fontsize=24)
     mkpath(OUTDIR)
     path = joinpath(OUTDIR, "counting_ones_$(ncat + ncont)d_regret.png")
     save(path, fig)
