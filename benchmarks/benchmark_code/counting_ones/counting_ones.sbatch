@@ -1,5 +1,5 @@
 #!/bin/bash
-#SBATCH --job-name=bigho_counting_ones
+#SBATCH --job-name=bighops_counting_ones
 #SBATCH --partition=compute
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1

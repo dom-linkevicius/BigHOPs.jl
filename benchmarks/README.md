@@ -25,9 +25,9 @@ julia --project=. submit.jl all             # delete all results, rerun everythi
 
 `submit.jl` installs and precompiles the environment before submitting. The jobs inherit the environment of the shell they are submitted from, so set these variables before calling it:
 
-- `BIGHO_BENCHMARK_DEPLOY=true`: run the NN benchmark at full scale; without it, it runs a small test version.
-- `BIGHO_BENCHMARK_REPEATS`: NN repeats, 50 by default at full scale.
-- `BIGHO_COUNTING_ONES_REPEATS`: counting ones repeats, 512 by default.
+- `BIGHOPS_BENCHMARK_DEPLOY=true`: run the NN benchmark at full scale; without it, it runs a small test version.
+- `BIGHOPS_BENCHMARK_REPEATS`: NN repeats, 50 by default at full scale.
+- `BIGHOPS_COUNTING_ONES_REPEATS`: counting ones repeats, 512 by default.
 
 Each benchmark's Slurm settings (CPUs, time limit, memory) are in its sbatch files. A counting ones job runs 4 repeats, an NN job one. Each repeat is saved to `results/<benchmark>/<setting>/repeat_<k>.jld2` when it finishes, and the job's log to `results/<benchmark>/`.
 
