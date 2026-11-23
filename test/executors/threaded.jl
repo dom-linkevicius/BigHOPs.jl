@@ -53,10 +53,9 @@ BigHOPs.create_run_entry(::BuggySampler, ho, id, params, unit) = BigHOPs.RunEntr
 
     ex_shutdown = Threaded(4)
     BigHOPs.start!(ex_shutdown, nothing)
-    finished = Ref(false)
-    BigHOPs.submit!(ex_shutdown, BigHOPs.RunEntry(1, (a=1,), Float64[]), _ -> (sleep(0.3); finished[] = true; 1))
+    BigHOPs.submit!(ex_shutdown, BigHOPs.RunEntry(1, (a=1,), Float64[]), _ -> (sleep(0.3); 1))
     BigHOPs.shutdown!(ex_shutdown)
-    @test finished[]
+    @test isready(ex_shutdown.results)
 
     failed_task = @async throw(InterruptException())
     try
@@ -124,4 +123,13 @@ BigHOPs.create_run_entry(::BuggySampler, ho, id, params, unit) = BigHOPs.RunEntr
     ho_slow = Hyperoptimizer(_ -> (sleep(delay); 1.0), (a=Nominal(1:n_slow),); n=n_slow)
     elapsed = @elapsed run!(ho_slow; executor=Threaded(n_slow))
     @test elapsed < n_slow * delay / 2
+
+    calls = Ref(0)
+    shared = [[1], [2]]
+    mutate_inputs(p) = (calls[] += 1; push!(p.v, 0); calls[] * length(p.v))
+    ho_copies = Hyperoptimizer(mutate_inputs, (v=Nominal(shared),); n=4)
+    run!(ho_copies; executor=Threaded(2), show_progress=false)
+    @test calls[] == 0
+    @test shared == [[1], [2]]
+    @test all(e -> e.value == 2, ho_copies.runs)
 end

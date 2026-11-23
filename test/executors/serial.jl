@@ -34,4 +34,13 @@
     run!(ho_exact; executor=Serial())
     @test minimum(ho_exact) == 0
     @test minimizer(ho_exact) == [7, 3]
+
+    calls = Ref(0)
+    shared = [[1], [2]]
+    mutate_inputs(p) = (calls[] += 1; push!(p.v, 0); calls[] * length(p.v))
+    ho_copies = Hyperoptimizer(mutate_inputs, (v=Nominal(shared),); n=4)
+    run!(ho_copies; executor=Serial(), show_progress=false)
+    @test calls[] == 0
+    @test shared == [[1], [2]]
+    @test all(e -> e.value == 2, ho_copies.runs)
 end

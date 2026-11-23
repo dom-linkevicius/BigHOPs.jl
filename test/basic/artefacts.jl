@@ -11,9 +11,9 @@ end
 
 struct LoggingWrapper{F}
     f::F
-    log::Vector{Any}
 end
-BigHOPs.call_objective(w::LoggingWrapper, params, pre_artefact) = (push!(w.log, pre_artefact); w.f(params))
+const CALL_OBJECTIVE_LOG = Any[]
+BigHOPs.call_objective(w::LoggingWrapper, params, pre_artefact) = (push!(CALL_OBJECTIVE_LOG, pre_artefact); w.f(params))
 
 @testset "Stateful objectives / artefacts" begin
     @info "Testing Stateful objective artefact threading"
@@ -39,10 +39,9 @@ BigHOPs.call_objective(w::LoggingWrapper, params, pre_artefact) = (push!(w.log, 
     @test_logs (:warn, r"non-Real") run!(ho_err)
     @test length(results(ho_err)) == 0
 
-    log = Any[]
-    ho_custom = Hyperoptimizer(LoggingWrapper(p -> p.a + p.b, log), (a=Nominal([1]), b=Nominal([2])); n=1)
+    ho_custom = Hyperoptimizer(LoggingWrapper(p -> p.a + p.b), (a=Nominal([1]), b=Nominal([2])); n=1)
     run!(ho_custom)
-    @test log == [nothing]
+    @test CALL_OBJECTIVE_LOG == [nothing]
     @test minimum(ho_custom) == 3
 
     ho_tuple = Hyperoptimizer(p -> (p.a + p.b, "diagnostic"), (a=Nominal([1]), b=Nominal([2])); n=1)

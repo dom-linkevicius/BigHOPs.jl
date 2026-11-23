@@ -46,7 +46,7 @@ function submit!(executor::Threaded, entry::RunEntry, f)
     t = Threads.@spawn begin
         start_time = now()
         outcome = try
-            safe_call(f, entry.params, entry.pre_artefact)
+            safe_call(deepcopy(f), deepcopy(entry.params), entry.pre_artefact)
         catch e
             @warn "objective interrupted" error = e
             e

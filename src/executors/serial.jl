@@ -13,7 +13,7 @@ shutdown!(::Serial) = nothing
 
 function submit!(executor::Serial, entry::RunEntry, f)
     entry.metadata[:start_time] = now()
-    outcome = safe_call(f, entry.params, entry.pre_artefact)
+    outcome = safe_call(deepcopy(f), deepcopy(entry.params), entry.pre_artefact)
     entry.metadata[:end_time] = now()
     push!(executor.buffer, (entry, outcome))
     return nothing
