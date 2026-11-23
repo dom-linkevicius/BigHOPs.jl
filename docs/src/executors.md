@@ -9,7 +9,7 @@ run!(ho; executor=Threaded())
 
 The choice of executor should be informed by the problem at hand. Pick `Serial` for development and debugging, `Threaded` for one machine with multiple cores and intermediate size problems, and `DistributedQueue` for clusters, or trials that need a process of their own or a time limit. Finally, see [General functionalities](@ref) for some additional convenience functionalities related to executors.
 
-Every executor gives each trial its own copy of the objective `f`, of its hyperparameters `x` and of its `pre_artefact`. An objective's internal state therefore does not carry over from one trial to the next, changing `x` in place does not change the stored trial or the domain's values, and changing `pre_artefact` in place does not change the earlier trial's `post_artefact`. Anything the objective captures, e.g. training data, is copied once per trial.
+Every executor gives each trial its own copy of the objective `f`, of its hyperparameters `x` and of its `pre_artefact` (see [General functionalities](@ref)). Anything the objective captures, e.g. training data, is copied once per trial.
 
 ## Serial
 
