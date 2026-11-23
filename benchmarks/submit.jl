@@ -7,7 +7,6 @@ include("tasks.jl")
 
 const RERUN = !isempty(ARGS)
 const BENCHMARKS = isempty(ARGS) || ARGS == ["all"] ? sort(collect(keys(TASKS))) : ARGS
-const LOG_DIR = joinpath(@__DIR__, "slurm_logs")
 
 all(in(keys(TASKS)), BENCHMARKS) ||
     error("unknown benchmark in $BENCHMARKS; pass any of $(sort(collect(keys(TASKS)))), \"all\", or nothing")
@@ -24,8 +23,8 @@ function array_spec(ids)
     return join((length(r) == 1 ? "$(first(r))" : "$(first(r))-$(last(r))" for r in runs), ",")
 end
 
-mkpath(LOG_DIR)
 for benchmark in BENCHMARKS
+    mkpath(joinpath(@__DIR__, "results", benchmark))
     tasks = TASKS[benchmark]
     RERUN && foreach(task -> rm(task.path; force=true), tasks)
     pending = [i for (i, task) in enumerate(tasks) if !isfile(task.path)]
