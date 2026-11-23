@@ -105,7 +105,7 @@ Under `Serial` and `Threaded`, `pre_artefact` is the very object the earlier tri
 
 Whatever a `Stateful` objective returns as `post_artefact` is stored with its trial, whichever sampler is used. With a full-resource sampler, this is a way to keep something from every trial, such as the trained model, its training curve or metrics of interest, without having to save it from inside the objective. The artefacts can be easily accessed by converting a `Hyperoptimizer` to a `DataFrame` (see below). Every `post_artefact` is kept in memory for the whole run and written to every checkpoint, so it should be small enough to keep one per trial, e.g. a model's parameters rather than a copy of its training data.
 
-## DataFrame of trials
+## `DataFrame` of trials
 
 After a hyperoptimization run is completed casting the `Hyperoptimizer` into a `DataFrame` is a convenient way to conduct downstream analysis. It can be done by calling `DataFrame(ho)` which has one row per trial, including failed and abandoned ones, with its status, hyperparameters, value, error, artefacts and metadata. The `status` column holds the trial's state, and for a `Failed` or `TimedOut` trial, the `error` column holds what went wrong: the exception, or whatever the objective returned instead of a number.
 

@@ -1,6 +1,9 @@
 # Introduction
 
-`BigHOPs.jl` is a hyperparameter optimization library meant to be used in situations where individual function evaluations are costly. It is geared to be modular, extensible, to play well with compute clusters, taking care of common functionality and use cases to make hyperparameter optimization as straightforward as possible. The package is still under development and some of the features or implementations may change.
+`BigHOPs.jl` is a hyperparameter optimization library meant to be used in situations where individual function evaluations are costly. It is geared to be modular, extensible, to play well with compute clusters, taking care of common functionality and use cases to make hyperparameter optimization as straightforward as possible.
+
+!!! warning
+    The package is still under development and some of the features or implementations may change.
 
 Briefly, the samplers and executors are decoupled, the sampler is the only object dictating how to sample the candidates and the executor is the only object dictating how objective evaluations should be done. This allows for different composition of executors and samplers, depending on the optimization problem and available resources. Having first defined a `Hyperoptimizer` with a sampler in it, call it `ho`, we then specify the executor at runtime, when calling `run!`. Internally, `run!` alternates between drawing candidates from the sampler and handing them to the executor, running the following procedure:
 
@@ -18,7 +21,9 @@ until no more candidates will be drawn and no evaluation is running
 shut the executor down
 ```
 
-Note that a sampler can have no candidate ready while it waits on results. If you want to contribute to `BigHOPs.jl` or request a sampler, executor or other functionality see [Contributing](@ref). We next present a runnable sample code snippet, which you can use to get started, with each object and function explained in the [Manual](domains.md).
+Note that a sampler can have no candidate ready while it waits on results.
+
+If you want to contribute to `BigHOPs.jl` or request a sampler, executor or other functionality see [Contributing](@ref). We next present a runnable sample code snippet, which you can use to get started, with each object and function explained in the [Manual](domains.md).
 
 
 
@@ -77,3 +82,5 @@ for ax in fig.content  # thin out the ticks, leaving the categorical panels' lab
     end
 end
 ```
+
+![Sample summaryplot output](assets/summaryplot.png)
