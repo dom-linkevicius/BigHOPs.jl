@@ -31,12 +31,9 @@ function submit! end
     poll(executor, timeout=Inf) -> Vector{Tuple{RunEntry,Any}}
 
 Return the `(entry, outcome)` pairs finished since the last call, waiting up to `timeout`
-seconds for at least one if any are still running. Executors that implement only
-`poll(executor)` ignore `timeout`.
+seconds for at least one if any are still running.
 """
 function poll end
-
-poll(executor::AbstractExecutor, ::Real) = poll(executor)
 
 """
     capacity(executor) -> Int

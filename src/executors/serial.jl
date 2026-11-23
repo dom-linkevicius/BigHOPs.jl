@@ -19,7 +19,7 @@ function submit!(executor::Serial, entry::RunEntry, f)
     return nothing
 end
 
-function poll(executor::Serial)
+function poll(executor::Serial, timeout::Real=Inf)
     out = copy(executor.buffer)
     empty!(executor.buffer)
     return out
