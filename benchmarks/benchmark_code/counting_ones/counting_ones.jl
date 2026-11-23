@@ -67,5 +67,6 @@ function run_task(task)
     println("$sampler repeat=$repeat  $(round(elapsed; digits=1))s  trials=$(length(trials.r))  " *
             "budget/b_max=$(round(sum(Float64, trials.r) / R_MAX; digits=1))  " *
             "best measured regret=$(round((minimum(trials.value) + ncat + ncont) / (ncat + ncont); digits=5))")
+    flush(stdout)
     return (; ncat, ncont, target, r_max=R_MAX, trials)
 end
