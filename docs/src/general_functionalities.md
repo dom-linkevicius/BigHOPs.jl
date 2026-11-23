@@ -99,7 +99,7 @@ A `Stateful` objective is called as `f(x; pre_artefact)` and returns a tuple `(v
 
 `Hyperband`, `ASHA` and `BOHB` warn when the objective is not `Stateful`, since every promotion then starts over. `DEHB` trains every trial from scratch and never sets `pre_artefact`, so it warns when the objective is `Stateful`.
 
-Under `Serial` and `Threaded`, `pre_artefact` is the very object the earlier trial returned, so changing it in place, as `train!` does above, also changes what is stored for the earlier trial. Copy it first if the earlier state should be kept. Under `DistributedQueue`, each worker receives its own copy.
+Each trial receives its own copy of `pre_artefact`, so changing it in place, as `train!` does above, leaves what is stored for the earlier trial untouched.
 
 ### post_artefact
 

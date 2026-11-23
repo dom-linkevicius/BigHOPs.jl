@@ -132,4 +132,12 @@ BigHOPs.create_run_entry(::BuggySampler, ho, id, params, unit) = BigHOPs.RunEntr
     @test calls[] == 0
     @test shared == [[1], [2]]
     @test all(e -> e.value == 2, ho_copies.runs)
+
+    state = [0]
+    ex_copy = Threaded(1)
+    BigHOPs.start!(ex_copy, nothing)
+    BigHOPs.submit!(ex_copy, BigHOPs.RunEntry(1, (a=1,), Float64[]; pre_artefact=state), Stateful((p; pre_artefact) -> (push!(pre_artefact, 1); (1.0, pre_artefact))))
+    BigHOPs.poll(ex_copy)
+    BigHOPs.shutdown!(ex_copy)
+    @test state == [0]
 end
