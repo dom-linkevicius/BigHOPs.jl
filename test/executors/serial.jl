@@ -51,7 +51,7 @@
     @test state == [0]
 
     ho_capped = Hyperoptimizer(_ -> (sleep(0.2); 1.0), (a=Nominal([1, 2]),); n=100)
-    run!(ho_capped; executor=Serial(), time_cap=1.0, show_progress=false)
+    @test_logs (:warn, r"Serial") run!(ho_capped; executor=Serial(), time_cap=1.0, interrupt=true, show_progress=false)
     @test ho_capped.status == BigHOPs.Finished
     @test 1 <= length(ho_capped.runs) < 100
     @test all(e -> e.status == BigHOPs.Completed, ho_capped.runs)

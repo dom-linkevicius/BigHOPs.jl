@@ -13,9 +13,10 @@ Reset the executor at the start of a `run!`.
 function start! end
 
 """
-    shutdown!(executor)
+    shutdown!(executor; interrupt=false)
 
-Wait for or clean up in-flight work at the end of a `run!`, including when it fails.
+Wait for or clean up in-flight work at the end of a `run!`, including when it fails. With
+`interrupt=true`, `run!` has abandoned the trials still running, so don't wait for them.
 """
 function shutdown! end
 
@@ -36,15 +37,6 @@ seconds for at least one if any are still running. Executors that implement only
 function poll end
 
 poll(executor::AbstractExecutor, ::Real) = poll(executor)
-
-"""
-    interrupt!(executor)
-
-Called by `run!` when its `time_cap` passes with `interrupt=true`, before the trials still
-running are marked `Abandoned`; `shutdown!` should then not wait for them. Does nothing by
-default.
-"""
-interrupt!(::AbstractExecutor) = nothing
 
 """
     capacity(executor) -> Int

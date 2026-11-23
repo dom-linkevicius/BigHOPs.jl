@@ -9,7 +9,7 @@ end
 Serial() = Serial(Tuple{RunEntry,Any}[])
 
 start!(::Serial, ho) = nothing
-shutdown!(::Serial) = nothing
+shutdown!(::Serial; interrupt::Bool=false) = nothing
 
 function submit!(executor::Serial, entry::RunEntry, f)
     entry.metadata[:start_time] = now()

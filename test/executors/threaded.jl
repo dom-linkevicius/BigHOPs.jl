@@ -148,7 +148,7 @@ BigHOPs.create_run_entry(::BuggySampler, ho, id, params, unit) = BigHOPs.RunEntr
     @test all(e -> e.status == BigHOPs.Completed, ho_wait.runs)
 
     ho_cut = Hyperoptimizer(_ -> (sleep(5.0); 1.0), (a=Nominal([1, 2]),); n=100)
-    elapsed_cut = @elapsed run!(ho_cut; executor=Threaded(2), time_cap=1.0, interrupt=true, show_progress=false)
+    elapsed_cut = @elapsed @test_logs (:warn, r"Threaded") run!(ho_cut; executor=Threaded(2), time_cap=1.0, interrupt=true, show_progress=false)
     @test elapsed_cut < 4.0
     @test ho_cut.status == BigHOPs.Finished
     @test ho_cut.n_pending == 0

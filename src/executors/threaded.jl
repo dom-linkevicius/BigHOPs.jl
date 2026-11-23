@@ -30,11 +30,12 @@ function start!(executor::Threaded, ho)
 end
 
 """
-    shutdown!(executor::Threaded)
+    shutdown!(executor::Threaded; interrupt=false)
 
-Wait for every trial this executor started to finish.
+Wait for every trial this executor started to finish, unless `interrupt=true`.
 """
-function shutdown!(executor::Threaded)
+function shutdown!(executor::Threaded; interrupt::Bool=false)
+    interrupt && return nothing
     for t in executor.tasks
         wait(t)
     end
@@ -81,7 +82,5 @@ function poll(executor::Threaded, timeout::Real=Inf)
     end
     return out
 end
-
-interrupt!(executor::Threaded) = empty!(executor.tasks)
 
 capacity(executor::Threaded) = executor.pending_exception === nothing ? executor.max_concurrency - executor.in_flight : 0

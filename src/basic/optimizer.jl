@@ -137,6 +137,8 @@ function run!(ho::Hyperoptimizer; executor::AbstractExecutor=Serial(),
               save_every::Union{Int,Nothing}=nothing, save_path::Union{AbstractString,Nothing}=nothing,
               show_progress::Bool=true, time_cap::Real=Inf, interrupt::Bool=false)
     time_cap > 0 || throw(ArgumentError("run!: time_cap must be positive, got $time_cap"))
+    interrupt && executor isa Serial && @warn "run!: Serial can't interrupt a running trial, so with interrupt=true it still stops only between trials"
+    interrupt && executor isa Threaded && @warn "run!: Threaded can't stop running trials, so with interrupt=true they are abandoned but keep running in the background until they finish"
     save_every !== nothing && save_path === nothing &&
         throw(ArgumentError("run!: save_every requires save_path"))
     save_every !== nothing && save_every < 1 &&
@@ -175,10 +177,7 @@ function run!(ho::Hyperoptimizer; executor::AbstractExecutor=Serial(),
             for (entry, outcome) in poll(executor, interrupt ? max(deadline - time(), 0) : Inf)
                 tell!(ho, entry, outcome)
             end
-            if interrupt && time() >= deadline && ho.n_pending > 0
-                interrupt!(executor)
-                _abandon_pending!(ho)
-            end
+            interrupt && time() >= deadline && ho.n_pending > 0 && _abandon_pending!(ho)
             if save_every !== nothing && n_told(ho) - last_saved >= save_every
                 save_hyperoptimizer(ho, save_path)
                 last_saved = n_told(ho)
@@ -193,7 +192,7 @@ function run!(ho::Hyperoptimizer; executor::AbstractExecutor=Serial(),
         _abandon_pending!(ho)
         rethrow(e)
     finally
-        shutdown!(executor)
+        shutdown!(executor; interrupt=interrupt && time() >= deadline)
         progress !== nothing && ProgressMeter.finish!(progress)
     end
     return ho
