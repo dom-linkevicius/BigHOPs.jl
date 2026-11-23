@@ -146,8 +146,13 @@ function submit!(executor::DistributedQueue, entry::RunEntry, f)
         outcome = try
             executor.setup_worker(worker)
             _record_worker!(executor, entry, worker)
+            entry.metadata[:start_time] = now()
             future = Distributed.remotecall(safe_call, worker, f, entry.params, entry.pre_artefact)
-            _fetch_within(limit, future, worker, executor.teardown_timeout)
+            try
+                _fetch_within(limit, future, worker, executor.teardown_timeout)
+            finally
+                entry.metadata[:end_time] = now()
+            end
         catch e
             @warn "setup_worker() or objective errored" error = e
             e

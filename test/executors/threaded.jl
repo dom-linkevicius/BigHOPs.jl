@@ -33,6 +33,7 @@ BigHOPs.create_run_entry(::BuggySampler, ho, id, params, unit) = BigHOPs.RunEntr
     @test length(out) == 2
     @test BigHOPs.capacity(ex) == 2
     @test Set(e.id for (e, _) in out) == Set([1, 2])
+    @test all(e.metadata[:start_time] <= e.metadata[:end_time] for (e, _) in out)
     BigHOPs.shutdown!(ex)
 
     ex_batch = Threaded(4)
@@ -40,9 +41,9 @@ BigHOPs.create_run_entry(::BuggySampler, ho, id, params, unit) = BigHOPs.RunEntr
     entryA = BigHOPs.RunEntry(1, (a=1,), Float64[])
     entryB = BigHOPs.RunEntry(2, (a=2,), Float64[])
     entryC = BigHOPs.RunEntry(3, (a=3,), Float64[])
-    put!(ex_batch.results, (entryA, BigHOPs.ObjectiveOutcome(10, nothing)))
-    put!(ex_batch.results, (entryB, InterruptException()))
-    put!(ex_batch.results, (entryC, BigHOPs.ObjectiveOutcome(30, nothing)))
+    put!(ex_batch.results, (entryA, BigHOPs.ObjectiveOutcome(10, nothing), now(), now()))
+    put!(ex_batch.results, (entryB, InterruptException(), now(), now()))
+    put!(ex_batch.results, (entryC, BigHOPs.ObjectiveOutcome(30, nothing), now(), now()))
     ex_batch.in_flight = 3
     out_batch = BigHOPs.poll(ex_batch)
     @test Set(e.id for (e, _) in out_batch) == Set([1, 3])

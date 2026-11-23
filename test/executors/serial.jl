@@ -10,6 +10,7 @@
     out = BigHOPs.poll(ex)
     @test length(out) == 1
     @test out[1][1].id == 1
+    @test out[1][1].metadata[:start_time] <= out[1][1].metadata[:end_time]
     @test BigHOPs.capacity(ex) == 1
     BigHOPs.shutdown!(ex)
 

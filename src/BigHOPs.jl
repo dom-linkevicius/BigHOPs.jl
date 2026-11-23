@@ -15,6 +15,7 @@ export save_hyperoptimizer, load_hyperoptimizer
 using Random
 using Printf
 using Distributed
+using Dates: DateTime, now
 using StableRNGs: StableRNG
 import JLD2
 import ProgressMeter
