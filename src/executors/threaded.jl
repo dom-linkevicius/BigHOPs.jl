@@ -29,11 +29,6 @@ function start!(executor::Threaded, ho)
     return nothing
 end
 
-"""
-    shutdown!(executor::Threaded; interrupt=false)
-
-Wait for every trial this executor started to finish, unless `interrupt=true`.
-"""
 function shutdown!(executor::Threaded; interrupt::Bool=false)
     interrupt && return nothing
     for t in executor.tasks

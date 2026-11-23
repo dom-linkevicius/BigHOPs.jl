@@ -44,11 +44,6 @@ function start!(executor::DistributedQueue, ho)
     return nothing
 end
 
-"""
-    shutdown!(executor::DistributedQueue)
-
-Remove the workers of trials still running, waiting up to `teardown_timeout` seconds for each, then wait for their tasks to finish.
-"""
 function shutdown!(executor::DistributedQueue; interrupt::Bool=false)
     err = nothing
     for (pid, t) in executor.tasks
