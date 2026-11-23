@@ -49,4 +49,11 @@
     BigHOPs.submit!(ex_copy, BigHOPs.RunEntry(1, (a=1,), Float64[]; pre_artefact=state), Stateful((p; pre_artefact) -> (push!(pre_artefact, 1); (1.0, pre_artefact))))
     BigHOPs.poll(ex_copy)
     @test state == [0]
+
+    ho_capped = Hyperoptimizer(_ -> (sleep(0.2); 1.0), (a=Nominal([1, 2]),); n=100)
+    run!(ho_capped; executor=Serial(), time_cap=1.0, show_progress=false)
+    @test ho_capped.status == BigHOPs.Finished
+    @test 1 <= length(ho_capped.runs) < 100
+    @test all(e -> e.status == BigHOPs.Completed, ho_capped.runs)
+    @test_throws ArgumentError run!(ho_capped; time_cap=0)
 end

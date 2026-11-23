@@ -124,14 +124,31 @@ end
 
 _should_stop_asking(ho::Hyperoptimizer) = reached_target(ho) || exhausted(ho.sampler, ho) || blocked(ho.sampler, ho)
 
+function _abandon_pending!(ho::Hyperoptimizer)
+    lock(ho.lock) do
+        for (i, entry) in enumerate(ho.runs)
+            if entry.status === Pending
+                ho.runs[i] = _with_result(entry, Abandoned, missing, entry.post_artefact)
+                ho.n_pending -= 1
+            end
+        end
+    end
+    return ho
+end
+
 """
-    run!(ho; executor=Serial(), save_every=nothing, save_path=nothing, show_progress=true)
+    run!(ho; executor=Serial(), save_every=nothing, save_path=nothing, show_progress=true,
+         time_cap=Inf, interrupt=false)
 
 Evaluate trials until the target is reached or the sampler is exhausted, using `executor` (`Serial`, `Threaded` or `DistributedQueue`). Given `save_path`, `ho` is checkpointed when the run ends, and also after every `save_every` trials if that is set; resume with `load_hyperoptimizer`.
+No trial starts after `time_cap` seconds; the run then waits for the trials still running,
+or with `interrupt=true` marks them `Abandoned` and ends. `DistributedQueue` then removes
+their workers, `Threaded` leaves them running unobserved, and `Serial` cannot stop mid-trial.
 """
 function run!(ho::Hyperoptimizer; executor::AbstractExecutor=Serial(),
               save_every::Union{Int,Nothing}=nothing, save_path::Union{AbstractString,Nothing}=nothing,
-              show_progress::Bool=true)
+              show_progress::Bool=true, time_cap::Real=Inf, interrupt::Bool=false)
+    time_cap > 0 || throw(ArgumentError("run!: time_cap must be positive, got $time_cap"))
     save_every !== nothing && save_path === nothing &&
         throw(ArgumentError("run!: save_every requires save_path"))
     save_every !== nothing && save_every < 1 &&
@@ -153,6 +170,7 @@ function run!(ho::Hyperoptimizer; executor::AbstractExecutor=Serial(),
         return ho
     end
     ho.status = Running
+    deadline = time() + time_cap
     start!(executor, ho)
     last_saved = n_told(ho)
     progress = nothing
@@ -162,19 +180,24 @@ function run!(ho::Hyperoptimizer; executor::AbstractExecutor=Serial(),
     end
     try
         while true
-            while !_should_stop_asking(ho) && capacity(executor) > 0
+            while !_should_stop_asking(ho) && time() < deadline && capacity(executor) > 0
                 entry = ask!(ho)
                 submit!(executor, entry, ho.objective)
             end
-            for (entry, outcome) in poll(executor)
+            outcomes = interrupt && isfinite(deadline) ? poll(executor, max(deadline - time(), 0)) : poll(executor)
+            for (entry, outcome) in outcomes
                 tell!(ho, entry, outcome)
+            end
+            if interrupt && time() >= deadline && ho.n_pending > 0
+                interrupt!(executor)
+                _abandon_pending!(ho)
             end
             if save_every !== nothing && n_told(ho) - last_saved >= save_every
                 save_hyperoptimizer(ho, save_path)
                 last_saved = n_told(ho)
             end
             progress !== nothing && ProgressMeter.update!(progress, n_told(ho))
-            _should_stop_asking(ho) && ho.n_pending == 0 && break
+            (_should_stop_asking(ho) || time() >= deadline) && ho.n_pending == 0 && break
         end
         ho.status = Finished
         save_path !== nothing && save_hyperoptimizer(ho, save_path)
@@ -189,13 +212,6 @@ end
 
 function _handle_run_error(e, ho::Hyperoptimizer)
     ho.status = Errored
-    lock(ho.lock) do
-        for (i, entry) in enumerate(ho.runs)
-            if entry.status === Pending
-                ho.runs[i] = _with_result(entry, Abandoned, missing, entry.post_artefact)
-                ho.n_pending -= 1
-            end
-        end
-    end
+    _abandon_pending!(ho)
     rethrow(e)
 end

@@ -34,6 +34,23 @@ Return the `(entry, outcome)` pairs finished since the last call, waiting for at
 function poll end
 
 """
+    poll(executor, timeout) -> Vector{Tuple{RunEntry,Any}}
+
+Like `poll(executor)`, but give up waiting after `timeout` seconds and return what has
+finished, possibly nothing. Defaults to `poll(executor)`.
+"""
+poll(executor::AbstractExecutor, ::Real) = poll(executor)
+
+"""
+    interrupt!(executor)
+
+Called by `run!` when its `time_cap` passes with `interrupt=true`, before the trials still
+running are marked `Abandoned`; `shutdown!` should then not wait for them. Does nothing by
+default.
+"""
+interrupt!(::AbstractExecutor) = nothing
+
+"""
     capacity(executor) -> Int
 
 How many more trials the executor can accept right now.

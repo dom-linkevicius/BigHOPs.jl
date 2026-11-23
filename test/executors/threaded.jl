@@ -140,4 +140,17 @@ BigHOPs.create_run_entry(::BuggySampler, ho, id, params, unit) = BigHOPs.RunEntr
     BigHOPs.poll(ex_copy)
     BigHOPs.shutdown!(ex_copy)
     @test state == [0]
+
+    ho_wait = Hyperoptimizer(_ -> (sleep(2.0); 1.0), (a=Nominal([1, 2]),); n=100)
+    run!(ho_wait; executor=Threaded(2), time_cap=1.0, show_progress=false)
+    @test ho_wait.status == BigHOPs.Finished
+    @test length(ho_wait.runs) == 2
+    @test all(e -> e.status == BigHOPs.Completed, ho_wait.runs)
+
+    ho_cut = Hyperoptimizer(_ -> (sleep(5.0); 1.0), (a=Nominal([1, 2]),); n=100)
+    elapsed_cut = @elapsed run!(ho_cut; executor=Threaded(2), time_cap=1.0, interrupt=true, show_progress=false)
+    @test elapsed_cut < 4.0
+    @test ho_cut.status == BigHOPs.Finished
+    @test ho_cut.n_pending == 0
+    @test count(e -> e.status == BigHOPs.Abandoned, ho_cut.runs) == 2
 end

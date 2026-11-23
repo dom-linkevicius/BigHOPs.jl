@@ -185,4 +185,12 @@ function poll(executor::DistributedQueue)
     return out
 end
 
+function poll(executor::DistributedQueue, timeout::Real)
+    if executor.pending_exception === nothing && executor.in_flight > 0
+        timedwait(() -> isready(executor.results), timeout)
+        isready(executor.results) || return Tuple{RunEntry,Any}[]
+    end
+    return poll(executor)
+end
+
 capacity(executor::DistributedQueue) = executor.pending_exception === nothing ? executor.max_concurrency - executor.in_flight : 0

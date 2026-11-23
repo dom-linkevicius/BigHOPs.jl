@@ -43,6 +43,7 @@ end
 
 function submit!(executor::Threaded, entry::RunEntry, f)
     executor.in_flight += 1
+    results = executor.results
     t = Threads.@spawn begin
         start_time = now()
         outcome = try
@@ -51,7 +52,7 @@ function submit!(executor::Threaded, entry::RunEntry, f)
             @warn "objective interrupted" error = e
             e
         end
-        put!(executor.results, (entry, outcome, start_time, now()))
+        put!(results, (entry, outcome, start_time, now()))
     end
     push!(executor.tasks, t)
     return nothing
@@ -79,5 +80,15 @@ function poll(executor::Threaded)
     end
     return out
 end
+
+function poll(executor::Threaded, timeout::Real)
+    if executor.pending_exception === nothing && executor.in_flight > 0
+        timedwait(() -> isready(executor.results), timeout)
+        isready(executor.results) || return Tuple{RunEntry,Any}[]
+    end
+    return poll(executor)
+end
+
+interrupt!(executor::Threaded) = empty!(executor.tasks)
 
 capacity(executor::Threaded) = executor.pending_exception === nothing ? executor.max_concurrency - executor.in_flight : 0
