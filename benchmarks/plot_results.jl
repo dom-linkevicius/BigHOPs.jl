@@ -6,7 +6,7 @@ const RESULTS_DIR = joinpath(@__DIR__, "nn_results")
 
 results_path(name, ex_name) = joinpath(RESULTS_DIR, "$(name)_$(ex_name).jld2")
 
-const OUTDIR = joinpath(@__DIR__, "..", "docs", "benchmarks")
+const OUTDIR = joinpath(@__DIR__, "..", "docs", "src", "figures")
 mkpath(OUTDIR)
 
 const REGRET_GRID_POINTS = 40

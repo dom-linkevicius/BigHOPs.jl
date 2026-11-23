@@ -3,7 +3,7 @@ using JLD2
 using Statistics: mean, std
 
 const RESULTS_DIR = joinpath(@__DIR__, "counting_ones_results")
-const OUTDIR = joinpath(@__DIR__, "..", "docs", "benchmarks")
+const OUTDIR = joinpath(@__DIR__, "..", "docs", "src", "figures")
 const SAMPLER_COLORS = Dict("Random" => Makie.wong_colors()[1], "Hyperband" => Makie.wong_colors()[3], "DEHB" => Makie.wong_colors()[2],
                             "BOHB" => Makie.wong_colors()[4])
 

@@ -20,4 +20,4 @@ jobs:
       - uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "Refresh benchmark plot"
-          file_pattern: docs/benchmarks/*.png
+          file_pattern: docs/src/figures/*.png

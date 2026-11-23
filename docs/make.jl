@@ -2,8 +2,6 @@ using Documenter, DocumenterVitepress, DocumenterCitations
 
 using BigHOPs
 
-cp(joinpath(@__DIR__, "benchmarks"), joinpath(@__DIR__, "src", "figures"); force=true)
-
 bib = CitationBibliography(joinpath(@__DIR__, "src", "references.bib"); style=:authoryear)
 
 makedocs(;
