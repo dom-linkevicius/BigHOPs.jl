@@ -6,7 +6,7 @@ import AlgebraOfGraphics
 using AlgebraOfGraphics: data, mapping, visual, draw!
 
 # Panels are small and numerous, so tick labels start below the Makie default; anything
-# passed in axis_kwargs still wins, since it is splatted last.
+# passed in axis still wins, since it is splatted last.
 const _TICKLABEL_DEFAULTS = (; xticklabelsize=9, yticklabelsize=9)
 
 _is_categorical(column) = !(eltype(column) <: Real)
@@ -23,15 +23,15 @@ function _panel(completed, p)
     return frame, (; xticks=(1:length(levels), levels))
 end
 
-function _draw_marginal_scatter!(fig, row, col, completed, p; axis_kwargs, scatter_kwargs, histogram_kwargs)
+function _draw_marginal_scatter!(fig, row, col, completed, p; axis, scatter, histogram)
     frame, ticks = _panel(completed, p)
     gl = fig[row, col] = GridLayout()
-    ax_top = Axis(gl[1, 1]; _TICKLABEL_DEFAULTS..., axis_kwargs...)
-    ax_main = Axis(gl[2, 1]; xlabel=string(p), ylabel="value", ticks..., _TICKLABEL_DEFAULTS..., axis_kwargs...)
-    ax_right = Axis(gl[2, 2]; _TICKLABEL_DEFAULTS..., axis_kwargs...)
-    draw!(ax_top, data(frame) * mapping(p) * _marginal(frame[!, p]) * visual(BarPlot; histogram_kwargs...))
-    draw!(ax_main, data(frame) * mapping(p, :value) * visual(Scatter; scatter_kwargs...))
-    draw!(ax_right, data(completed) * mapping(:value) * AlgebraOfGraphics.histogram() * visual(BarPlot; direction=:x, histogram_kwargs...))
+    ax_top = Axis(gl[1, 1]; _TICKLABEL_DEFAULTS..., axis...)
+    ax_main = Axis(gl[2, 1]; xlabel=string(p), ylabel="value", ticks..., _TICKLABEL_DEFAULTS..., axis...)
+    ax_right = Axis(gl[2, 2]; _TICKLABEL_DEFAULTS..., axis...)
+    draw!(ax_top, data(frame) * mapping(p) * _marginal(frame[!, p]) * visual(BarPlot; histogram...))
+    draw!(ax_main, data(frame) * mapping(p, :value) * visual(Scatter; scatter...))
+    draw!(ax_right, data(completed) * mapping(:value) * AlgebraOfGraphics.histogram() * visual(BarPlot; direction=:x, histogram...))
     linkxaxes!(ax_top, ax_main)
     linkyaxes!(ax_right, ax_main)
     hidedecorations!(ax_top, grid=false)
@@ -41,15 +41,15 @@ function _draw_marginal_scatter!(fig, row, col, completed, p; axis_kwargs, scatt
     return nothing
 end
 
-function _draw_value_over_id!(fig, row, col, completed; axis_kwargs, scatter_kwargs)
-    ax = Axis(fig[row, col]; xlabel="id", ylabel="value", title="obj. value over id", _TICKLABEL_DEFAULTS..., axis_kwargs...)
-    draw!(ax, data(completed) * mapping(:id, :value) * visual(Scatter; scatter_kwargs...))
+function _draw_value_over_id!(fig, row, col, completed; axis, scatter)
+    ax = Axis(fig[row, col]; xlabel="id", ylabel="value", title="obj. value over id", _TICKLABEL_DEFAULTS..., axis...)
+    draw!(ax, data(completed) * mapping(:id, :value) * visual(Scatter; scatter...))
     return nothing
 end
 
-function _draw_running_min!(fig, row, col, completed; axis_kwargs, line_kwargs)
-    ax = Axis(fig[row, col]; xlabel="id", ylabel="best value so far", title="min. over trials", _TICKLABEL_DEFAULTS..., axis_kwargs...)
-    lines!(ax, completed.id, accumulate(min, completed.value); line_kwargs...)
+function _draw_running_min!(fig, row, col, completed; axis, line)
+    ax = Axis(fig[row, col]; xlabel="id", ylabel="best value so far", title="min. over trials", _TICKLABEL_DEFAULTS..., axis...)
+    lines!(ax, completed.id, accumulate(min, completed.value); line...)
     return nothing
 end
 
@@ -59,10 +59,9 @@ function BigHOPs.summaryplot(ho::BigHOPs.Hyperoptimizer; figure=NamedTuple(), ax
         error("summaryplot: this Hyperoptimizer has no completed trials")
     completed = sort(BigHOPs.DataFrames.DataFrame(ho)[ho.completed, :], :id)
 
-    panels = Any[(fig, row, col) -> _draw_marginal_scatter!(fig, row, col, completed, p; axis_kwargs=axis, scatter_kwargs=scatter,
-                                                            histogram_kwargs=histogram) for p in ho.params]
-    push!(panels, (fig, row, col) -> _draw_value_over_id!(fig, row, col, completed; axis_kwargs=axis, scatter_kwargs=scatter))
-    push!(panels, (fig, row, col) -> _draw_running_min!(fig, row, col, completed; axis_kwargs=axis, line_kwargs=line))
+    panels = Any[(fig, row, col) -> _draw_marginal_scatter!(fig, row, col, completed, p; axis, scatter, histogram) for p in ho.params]
+    push!(panels, (fig, row, col) -> _draw_value_over_id!(fig, row, col, completed; axis, scatter))
+    push!(panels, (fig, row, col) -> _draw_running_min!(fig, row, col, completed; axis, line))
 
     # As square as possible (e.g. 4 -> 2x2, 6 -> 2x3), rather than one long column.
     total = length(panels)
