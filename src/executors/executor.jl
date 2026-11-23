@@ -27,18 +27,14 @@ Hand `entry` to the executor to evaluate with objective `f`; its outcome comes b
 function submit! end
 
 """
-    poll(executor) -> Vector{Tuple{RunEntry,Any}}
+    poll(executor, timeout=Inf) -> Vector{Tuple{RunEntry,Any}}
 
-Return the `(entry, outcome)` pairs finished since the last call, waiting for at least one if any are still running.
+Return the `(entry, outcome)` pairs finished since the last call, waiting up to `timeout`
+seconds for at least one if any are still running. Executors that implement only
+`poll(executor)` ignore `timeout`.
 """
 function poll end
 
-"""
-    poll(executor, timeout) -> Vector{Tuple{RunEntry,Any}}
-
-Like `poll(executor)`, but give up waiting after `timeout` seconds and return what has
-finished, possibly nothing. Defaults to `poll(executor)`.
-"""
 poll(executor::AbstractExecutor, ::Real) = poll(executor)
 
 """

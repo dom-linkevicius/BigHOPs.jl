@@ -71,22 +71,15 @@ function _take_one!(executor::Threaded, out)
     return out
 end
 
-function poll(executor::Threaded)
+function poll(executor::Threaded, timeout::Real=Inf)
     executor.pending_exception !== nothing && throw(executor.pending_exception)
     executor.in_flight == 0 && return Tuple{RunEntry,Any}[]
+    isfinite(timeout) && timedwait(() -> isready(executor.results), timeout) === :timed_out && return Tuple{RunEntry,Any}[]
     out = _take_one!(executor, Tuple{RunEntry,Any}[])
     while executor.in_flight > 0 && isready(executor.results)
         _take_one!(executor, out)
     end
     return out
-end
-
-function poll(executor::Threaded, timeout::Real)
-    if executor.pending_exception === nothing && executor.in_flight > 0
-        timedwait(() -> isready(executor.results), timeout)
-        isready(executor.results) || return Tuple{RunEntry,Any}[]
-    end
-    return poll(executor)
 end
 
 interrupt!(executor::Threaded) = empty!(executor.tasks)

@@ -172,8 +172,7 @@ function run!(ho::Hyperoptimizer; executor::AbstractExecutor=Serial(),
                 entry = ask!(ho)
                 submit!(executor, entry, ho.objective)
             end
-            outcomes = interrupt && isfinite(deadline) ? poll(executor, max(deadline - time(), 0)) : poll(executor)
-            for (entry, outcome) in outcomes
+            for (entry, outcome) in poll(executor, interrupt ? max(deadline - time(), 0) : Inf)
                 tell!(ho, entry, outcome)
             end
             if interrupt && time() >= deadline && ho.n_pending > 0
