@@ -45,10 +45,10 @@ function hpbandster_measured_regret(trials, d)
 end
 
 const METRICS = (
-    (title="Falkner et al. (2018)", ylabel="immediate regret",
+    (title="Falkner et al. (2018)", ylabel="immediate regret", max_repeats=512,
      curves=Dict("Random" => incumbent_true_regret, "Hyperband" => incumbent_true_regret,
                  "DEHB" => incumbent_true_regret, "BOHB" => incumbent_true_regret)),
-    (title="Awad et al. (2021)", ylabel="validation regret",
+    (title="Awad et al. (2021)", ylabel="validation regret", max_repeats=50,
      curves=Dict("Random" => hpbandster_measured_regret, "Hyperband" => hpbandster_measured_regret,
                  "DEHB" => hpbandster_measured_regret, "BOHB" => hpbandster_measured_regret)),
 )
@@ -66,8 +66,11 @@ function on_grid(budget, curve)
     return out
 end
 
-function load_curves(ncat, ncont, name; curve=incumbent_true_regret)
-    paths = filter(endswith(".jld2"), readdir(results_dir(ncat, ncont, name); join=true))
+repeat_number(path) = parse(Int, match(r"repeat_(\d+)\.jld2$", path)[1])
+
+function load_curves(ncat, ncont, name; curve=incumbent_true_regret, max_repeats)
+    paths = filter(path -> endswith(path, ".jld2") && repeat_number(path) <= max_repeats,
+                   readdir(results_dir(ncat, ncont, name); join=true))
     rows = map(paths) do path
         trials, r_max = JLD2.load(path, "trials", "r_max")
         on_grid(cumsum(Float64.(trials.r)) ./ r_max, curve(trials, ncat + ncont))
@@ -93,12 +96,13 @@ function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims)
                   yticks=decades === nothing ? Makie.automatic : Makie.LogTicks(decades), yminorticksvisible=true, yminorgridvisible=true,
                   yminorticks=decades === nothing ? IntervalsBetween(9) : [m * 10.0^e for e in decades for m in 2:9])
         for name in samplers
-            curves = load_curves(ncat, ncont, name; curve=metric.curves[name])
+            curves = load_curves(ncat, ncont, name; curve=metric.curves[name], max_repeats=metric.max_repeats)
             repeats = size(curves, 1)
             color = SAMPLER_COLORS[name]
             lines!(ax, GRID, columnwise(mean, curves, bottom); label=name, color=color)
             band!(ax, GRID, columnwise(c -> mean(c) - standard_error(c), curves, bottom), columnwise(c -> mean(c) + standard_error(c), curves, bottom); color=(color, 0.15))
         end
+        ax.title = "$(metric.title), $repeats repeats"
         xlims!(ax, xlims...)
         if ylims !== nothing
             ylims!(ax, ylims...)
@@ -107,7 +111,7 @@ function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims)
             Legend(fig[2, 1:length(METRICS)], ax; orientation=:horizontal, framevisible=false)
         end
     end
-    Label(fig[1, :], "Stochastic Counting Ones, $ncat categorical + $ncont continuous ($repeats repeats)"; font=:bold, fontsize=24)
+    Label(fig[1, :], "Stochastic Counting Ones, $ncat categorical + $ncont continuous"; font=:bold, fontsize=24)
     mkpath(OUTDIR)
     path = joinpath(OUTDIR, "counting_ones_$(ncat + ncont)d_regret.png")
     save(path, fig)

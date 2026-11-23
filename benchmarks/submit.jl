@@ -29,11 +29,10 @@ for benchmark in BENCHMARKS
     tasks = TASKS[benchmark]
     RERUN && foreach(task -> rm(task.path; force=true), tasks)
     pending = [i for (i, task) in enumerate(tasks) if !isfile(task.path)]
-    for cpus in unique(tasks[i].cpus for i in pending)
-        ids = filter(i -> tasks[i].cpus == cpus, pending)
-        wrap = "julia --project=. --threads=$cpus run_task.jl $benchmark \$SLURM_ARRAY_TASK_ID"
-        run(`sbatch --job-name=bigho_$benchmark --array=$(array_spec(ids)) --cpus-per-task=$cpus --chdir=$(@__DIR__)
-                    --output=$(joinpath(LOG_DIR, "%x_%A_%a.log")) --wrap=$wrap`)
+    for sbatch in unique(tasks[i].sbatch for i in pending)
+        ids = filter(i -> tasks[i].sbatch == sbatch, pending)
+        jobs = unique(cld.(ids, TASKS_PER_JOB[benchmark]))
+        run(Cmd(`sbatch --array=$(array_spec(jobs)) $sbatch`; dir=@__DIR__))
     end
     println("$benchmark: submitted $(length(pending)) of $(length(tasks)) tasks")
 end
