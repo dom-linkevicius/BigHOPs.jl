@@ -5,7 +5,13 @@
 !!! warning
     The package is still under development and some of the features or implementations may change.
 
-Briefly, the samplers and executors are decoupled, the sampler is the only object dictating how to sample the candidates and the executor is the only object dictating how objective evaluations should be done. This allows for different composition of executors and samplers, depending on the optimization problem and available resources. Having first defined a `Hyperoptimizer` with a sampler in it, call it `ho`, we then specify the executor at runtime, when calling `run!`. Internally, `run!` alternates between drawing candidates from the sampler and handing them to the executor, running the following procedure:
+Briefly, the samplers and executors are decoupled, the sampler is the only object dictating how to sample the candidates and the executor is the only object dictating how objective evaluations should be done. This allows for different composition of executors and samplers, depending on the optimization problem and available resources. Having first defined a `Hyperoptimizer` with a sampler in it, call it `ho`, we then specify the executor at runtime, when calling `run!`.
+
+```@docs; canonical=false
+run!
+```
+
+Internally, `run!` alternates between drawing candidates from the sampler and handing them to the executor, running the following procedure:
 
 ```text
 start the executor
