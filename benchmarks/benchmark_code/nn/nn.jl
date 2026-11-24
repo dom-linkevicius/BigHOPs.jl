@@ -158,7 +158,7 @@ total_resource_units = sum(
 hyperband_total_epochs = total_resource_units * EPOCHS_PER_RESOURCE
 RANDOM_FULL_EPOCHS[] = round(Int, hyperband_total_epochs / N_TRIALS)
 random_total_epochs = RANDOM_FULL_EPOCHS[] * N_TRIALS
-_log("Matched Random/LHS per-trial epochs to Hyperband/ASHA's total budget: random_full_epochs=$(RANDOM_FULL_EPOCHS[]) random_total_epochs=$random_total_epochs hyperband_total_epochs=$hyperband_total_epochs")
+_log("Matched Random per-trial epochs to Hyperband/ASHA's total budget: random_full_epochs=$(RANDOM_FULL_EPOCHS[]) random_total_epochs=$random_total_epochs hyperband_total_epochs=$hyperband_total_epochs")
 
 const PLAIN_OBJ = Stateful(nn_objective)
 const SH_OBJ = Stateful(nn_objective_stateful)
@@ -169,8 +169,6 @@ const SHA_INNER = RandomSampler()
 
 const MAKE_HYPEROPTIMIZER = Dict(
     "Random" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=RandomSampler(), n=N_TRIALS),
-    "LHS" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=LHSampler(), n=N_TRIALS),
-    "Sobol" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=SobolSampler(), n=N_TRIALS),
     "Hyperband" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, Hyperband(R=R_MAX, η=ETA, r_min=R_MIN, inner=SHA_INNER)),
     "ASHA" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, ASHA(R=R_MAX, η=ETA, r_min=R_MIN, inner=SHA_INNER)),
     "DEHB" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, DEHB(R=R_MAX, η=ETA, r_min=R_MIN)),
@@ -180,8 +178,8 @@ const MAKE_HYPEROPTIMIZER = Dict(
 _log("Warming up (JIT compilation)...")
 const WARMUP_OBJ = Stateful(_warmup_objective)
 const WARMUP_SH_OBJ = Stateful(_warmup_objective_stateful)
-for executor in EXECUTORS, sampler in (RandomSampler(), LHSampler(), SobolSampler())
-    run!(Hyperoptimizer(WARMUP_OBJ, CANDIDATES; sampler=sampler, n=2); executor=executor, show_progress=false)
+for executor in EXECUTORS
+    run!(Hyperoptimizer(WARMUP_OBJ, CANDIDATES; sampler=RandomSampler(), n=2); executor=executor, show_progress=false)
 end
 for sh_sampler in (Hyperband(R=1, η=3, r_min=1), ASHA(R=1, η=3, r_min=1), DEHB(R=3, η=3, r_min=1),
                    BOHB(R=1, η=3, r_min=1, iterations=20))
