@@ -1,5 +1,6 @@
 #!/bin/bash
-#SBATCH --job-name=bigho_nn_serial
+#SBATCH --job-name=bighops_nn_serial
+#SBATCH --partition=compute
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=1
 #SBATCH --time=00:30:00
