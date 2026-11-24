@@ -2,8 +2,8 @@
 #SBATCH --job-name=bighops_counting_ones_gp
 #SBATCH --partition=compute
 #SBATCH --ntasks=1
-#SBATCH --cpus-per-task=8
-#SBATCH --time=48:00:00
+#SBATCH --cpus-per-task=40
+#SBATCH --time=72:00:00
 #SBATCH --mem=32G
 #SBATCH --output=results/counting_ones/logs/%x_%A_%a.log
 
