@@ -10,13 +10,12 @@ const OUTDIR = joinpath(@__DIR__, "..", "..", "..", "docs", "src", "figures")
 mkpath(OUTDIR)
 
 const REGRET_GRID_POINTS = 40
-const SAMPLER_NAMES = ("Random", "LHS", "Hyperband", "ASHA", "DEHB", "Sobol", "BOHB")
+const SAMPLER_NAMES = ("Random", "Hyperband", "ASHA", "DEHB", "BOHB")
 const SAMPLER_COLORS = Dict(zip(SAMPLER_NAMES, Makie.wong_colors()))
-const SHA_SAMPLER_NAMES = ("Hyperband", "ASHA")
-const Y_UPPER_LIMIT = 0.11
-const Y_TICK_EXPONENTS = [-3, -2, -1]
-const X_LOWER_LIMIT = 1e-1
-const X_UPPER_LIMIT = 600
+const Y_UPPER_LIMIT = 0.07
+const Y_TICKS = 0.02 .* sqrt(2) .^ (-1:3)
+const X_LOWER_LIMIT = 1e0
+const X_UPPER_LIMIT = 2e3
 
 """
     _resample_to_grid(times, running_min, grid)
@@ -31,6 +30,13 @@ function _resample_to_grid(times, running_min, grid)
         j > 0 && (out[i] = running_min[j])
     end
     return out
+end
+
+function _median_ci(col)
+    n = length(col)
+    half_width = 1.96 * sqrt(n) / 2
+    sorted = sort(col)
+    return sorted[max(floor(Int, n / 2 - half_width), 1)], sorted[min(ceil(Int, n / 2 + 1 + half_width), n)]
 end
 
 function plot_results(runs, metadata)
@@ -53,7 +59,8 @@ function plot_results(runs, metadata)
         end
         regret = [any(isnan, col) ? NaN : max(median(col) - global_best, 1e-4) for col in eachcol(curves_on_grid)]
         lower = [any(isnan, col) ? NaN : max(quantile(col, 0.25) - global_best, 1e-4) for col in eachcol(curves_on_grid)]
-        computed[(name, ex_name)] = (; grid, regret)
+        bounds = [any(isnan, col) ? (NaN, NaN) : max.(_median_ci(col) .- global_best, 1e-4) for col in eachcol(curves_on_grid)]
+        computed[(name, ex_name)] = (; grid, regret, ci_lower=first.(bounds), ci_upper=last.(bounds))
         finite_lower = filter(!isnan, lower)
         isempty(finite_lower) || (ymin = min(ymin, minimum(finite_lower)))
     end
@@ -62,23 +69,25 @@ function plot_results(runs, metadata)
     legend_source = nothing
     for (row, ex_name, title_word) in ((1, :Serial, "Serial"), (2, :Threaded, "Threaded"))
         ax = Axis(fig[row, 1]; xlabel=(row == 2 ? "wall-clock time (s)" : ""),
-                  xscale=log10, yscale=log10, yticks=Makie.LogTicks(Y_TICK_EXPONENTS),
+                  xscale=log10, yscale=log10, yticks=Y_TICKS, ytickformat="{:.3f}",
                   xminorticksvisible=true, xminorgridvisible=true, xminorticks=IntervalsBetween(9),
-                  yminorticksvisible=true, yminorgridvisible=true, yminorticks=IntervalsBetween(9),
-                  title="Wall-clock regret comparison -- $title_word ($regret_repeats repeats/combo, $(metadata.nthreads) threads)")
+                  yminorticksvisible=true, yminorgridvisible=true, yminorticks=IntervalsBetween(2),
+                  title=(row == 2 ? "$title_word ($(metadata.nthreads) threads)" : title_word))
         for name in SAMPLER_NAMES
             haskey(computed, (name, ex_name)) || continue
             c = computed[(name, ex_name)]
             color = SAMPLER_COLORS[name]
-            label_name = name in SHA_SAMPLER_NAMES ? "$name/$(metadata.sha_inner_sampler)" : name
-            lines!(ax, c.grid, c.regret; label=label_name, color=color)
+            defined = .!isnan.(c.regret)
+            band!(ax, c.grid[defined], c.ci_lower[defined], c.ci_upper[defined]; color=(color, 0.15))
+            lines!(ax, c.grid, c.regret; label=name, color=color)
         end
         xlims!(ax, X_LOWER_LIMIT, X_UPPER_LIMIT)
         ylims!(ax, ymin, Y_UPPER_LIMIT)
         legend_source = ax
     end
     Label(fig[1:2, 0], "regret (best validation loss - global best)"; rotation=pi / 2, tellheight=false)
-    Legend(fig[0, 1], legend_source; orientation=:horizontal, nbanks=2)
+    Legend(fig[0, 1], legend_source; orientation=:horizontal)
+    Label(fig[-1, 1], "Wall-clock regret comparison ($regret_repeats repeats/combo)"; font=:bold, fontsize=20, tellwidth=false)
     save(joinpath(OUTDIR, "wallclock_regret_comparison.png"), fig)
 end
 

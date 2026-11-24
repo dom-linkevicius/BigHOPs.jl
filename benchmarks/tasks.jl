@@ -10,7 +10,7 @@ const COUNTING_ONES_TASKS = [(ncat=run.ncat, ncont=run.ncont, sampler=String(nam
 
 const NN_DIR = joinpath(@__DIR__, "results", "nn")
 const NN_REPEATS = parse(Int, get(ENV, "BIGHOPS_BENCHMARK_REPEATS", "50"))
-const NN_SAMPLERS = ("Random", "LHS", "Hyperband", "ASHA", "DEHB", "Sobol", "BOHB")
+const NN_SAMPLERS = ("Random", "Hyperband", "ASHA", "DEHB", "BOHB")
 const NN_EXECUTORS = ("Threaded", "Serial")
 const NN_TASKS = [(sampler=name, executor=ex_name, repeat=repeat, sbatch="benchmark_code/nn/nn_$(lowercase(ex_name)).sbatch",
                    path=joinpath(NN_DIR, "$(name)_$(ex_name)", "repeat_$repeat.jld2"))
