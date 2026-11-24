@@ -9,9 +9,9 @@ using LinearAlgebra: BLAS
 
 BLAS.set_num_threads(1)
 
-const R_MIN = DEPLOY ? 5 : 1
-const R_MAX = DEPLOY ? 1215 : 27
-const EPOCHS_PER_RESOURCE = DEPLOY ? 6 : 250
+const R_MIN = 5
+const R_MAX = 1215
+const EPOCHS_PER_RESOURCE = 6
 
 const RANDOM_FULL_EPOCHS = Ref(round(Int, R_MAX * EPOCHS_PER_RESOURCE))
 const BATCHSIZE = 32
@@ -148,19 +148,17 @@ const CANDIDATES = (
 
 const ETA = 3
 
-const N_TRIALS = DEPLOY ? BigHOPs._total_draws(R_MAX, R_MIN, ETA) : 4
+const N_TRIALS = BigHOPs._total_draws(R_MAX, R_MIN, ETA)
 
-if DEPLOY
-    smax = BigHOPs._smax(R_MAX, R_MIN, ETA)
-    total_resource_units = sum(
-        BigHOPs._capacity(R_MAX, R_MIN, ETA, k, i) * (BigHOPs._resource(R_MAX, R_MIN, ETA, k, i) - (i > 1 ? BigHOPs._resource(R_MAX, R_MIN, ETA, k, i - 1) : 0))
-        for k in 1:(smax+1) for i in 1:BigHOPs._n_rungs(R_MAX, R_MIN, ETA, k)
-    )
-    hyperband_total_epochs = total_resource_units * EPOCHS_PER_RESOURCE
-    RANDOM_FULL_EPOCHS[] = round(Int, hyperband_total_epochs / N_TRIALS)
-    random_total_epochs = RANDOM_FULL_EPOCHS[] * N_TRIALS
-    _log("Matched Random/LHS per-trial epochs to Hyperband/ASHA's total budget: random_full_epochs=$(RANDOM_FULL_EPOCHS[]) random_total_epochs=$random_total_epochs hyperband_total_epochs=$hyperband_total_epochs")
-end
+smax = BigHOPs._smax(R_MAX, R_MIN, ETA)
+total_resource_units = sum(
+    BigHOPs._capacity(R_MAX, R_MIN, ETA, k, i) * (BigHOPs._resource(R_MAX, R_MIN, ETA, k, i) - (i > 1 ? BigHOPs._resource(R_MAX, R_MIN, ETA, k, i - 1) : 0))
+    for k in 1:(smax+1) for i in 1:BigHOPs._n_rungs(R_MAX, R_MIN, ETA, k)
+)
+hyperband_total_epochs = total_resource_units * EPOCHS_PER_RESOURCE
+RANDOM_FULL_EPOCHS[] = round(Int, hyperband_total_epochs / N_TRIALS)
+random_total_epochs = RANDOM_FULL_EPOCHS[] * N_TRIALS
+_log("Matched Random/LHS per-trial epochs to Hyperband/ASHA's total budget: random_full_epochs=$(RANDOM_FULL_EPOCHS[]) random_total_epochs=$random_total_epochs hyperband_total_epochs=$hyperband_total_epochs")
 
 const PLAIN_OBJ = Stateful(nn_objective)
 const SH_OBJ = Stateful(nn_objective_stateful)
@@ -209,7 +207,7 @@ end
 
 function run_task(task)
     (; sampler, executor, repeat) = task
-    metadata = (n_trials=N_TRIALS, r_max=R_MAX, deploy=DEPLOY, nthreads=Threads.nthreads(),
+    metadata = (n_trials=N_TRIALS, r_max=R_MAX, nthreads=Threads.nthreads(),
                 sha_inner_sampler=nameof(typeof(SHA_INNER)))
     _log("repeat=$repeat sampler=$sampler executor=$executor -- starting")
     ho = MAKE_HYPEROPTIMIZER[sampler]()

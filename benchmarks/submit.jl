@@ -24,7 +24,7 @@ function array_spec(ids)
 end
 
 for benchmark in BENCHMARKS
-    mkpath(joinpath(@__DIR__, "results", benchmark))
+    mkpath(joinpath(@__DIR__, "results", benchmark, "logs"))
     tasks = TASKS[benchmark]
     RERUN && foreach(task -> rm(task.path; force=true), tasks)
     pending = [i for (i, task) in enumerate(tasks) if !isfile(task.path)]
