@@ -7,6 +7,8 @@ using StableRNGs: StableRNG
 using Random: shuffle
 using LinearAlgebra: BLAS
 
+include(joinpath(@__DIR__, "..", "gp_sampler.jl"))
+
 BLAS.set_num_threads(1)
 
 const R_MIN = 5
@@ -173,6 +175,7 @@ const MAKE_HYPEROPTIMIZER = Dict(
     "ASHA" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, ASHA(R=R_MAX, η=ETA, r_min=R_MIN, inner=SHA_INNER)),
     "DEHB" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, DEHB(R=R_MAX, η=ETA, r_min=R_MIN)),
     "BOHB" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, BOHB(R=R_MAX, η=ETA, r_min=R_MIN)),
+    "GP" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=gp_sampler(StableRNG(1)), n=N_TRIALS),
 )
 
 _log("Warming up (JIT compilation)...")
@@ -180,6 +183,7 @@ const WARMUP_OBJ = Stateful(_warmup_objective)
 const WARMUP_SH_OBJ = Stateful(_warmup_objective_stateful)
 for executor in EXECUTORS
     run!(Hyperoptimizer(WARMUP_OBJ, CANDIDATES; sampler=RandomSampler(), n=2); executor=executor, show_progress=false)
+    run!(Hyperoptimizer(WARMUP_OBJ, CANDIDATES; sampler=gp_sampler(StableRNG(1)), n=12); executor=executor, show_progress=false)
 end
 for sh_sampler in (Hyperband(R=1, η=3, r_min=1), ASHA(R=1, η=3, r_min=1), DEHB(R=3, η=3, r_min=1),
                    BOHB(R=1, η=3, r_min=1, iterations=20))

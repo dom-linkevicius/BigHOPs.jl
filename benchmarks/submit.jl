@@ -29,8 +29,7 @@ for benchmark in BENCHMARKS
     RERUN && foreach(task -> rm(task.path; force=true), tasks)
     pending = [i for (i, task) in enumerate(tasks) if !isfile(task.path)]
     for sbatch in unique(tasks[i].sbatch for i in pending)
-        ids = filter(i -> tasks[i].sbatch == sbatch, pending)
-        jobs = unique(cld.(ids, TASKS_PER_JOB[benchmark]))
+        jobs = unique(tasks[i].job for i in pending if tasks[i].sbatch == sbatch)
         run(Cmd(`sbatch --array=$(array_spec(jobs)) $sbatch`; dir=@__DIR__))
     end
     println("$benchmark: submitted $(length(pending)) of $(length(tasks)) tasks")

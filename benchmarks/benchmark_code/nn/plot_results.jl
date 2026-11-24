@@ -10,7 +10,7 @@ const OUTDIR = joinpath(@__DIR__, "..", "..", "..", "docs", "src", "figures")
 mkpath(OUTDIR)
 
 const REGRET_GRID_POINTS = 40
-const SAMPLER_NAMES = ("Random", "Hyperband", "ASHA", "DEHB", "BOHB")
+const SAMPLER_NAMES = ("Random", "Hyperband", "ASHA", "DEHB", "BOHB", "GP")
 const SAMPLER_COLORS = Dict(zip(SAMPLER_NAMES, Makie.wong_colors()))
 const Y_UPPER_LIMIT = 0.07
 const Y_TICKS = 0.02 .* sqrt(2) .^ (-1:3)
