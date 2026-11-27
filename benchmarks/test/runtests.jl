@@ -1,6 +1,9 @@
-@testset "VirtualBenchmarkExecutor" begin
-    @info "Testing VirtualBenchmarkExecutor"
+using Test
+using BigHOPs
 
+include(joinpath(@__DIR__, "..", "benchmark_code", "virtual_benchmark.jl"))
+
+@testset "VirtualBenchmarkExecutor" begin
     @test_throws ArgumentError VirtualBenchmarkExecutor(0)
 
     lookup = Stateful((p; pre_artefact) -> (p.a, (training_time=p.a,)))

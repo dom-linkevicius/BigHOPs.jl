@@ -6,7 +6,7 @@ export RandomSampler, LHSampler
 export SobolSampler
 export GPSampler, ThompsonSampling
 export Hyperband, ASHA, DEHB, BOHB
-export Serial, Threaded, DistributedQueue, VirtualBenchmarkExecutor
+export Serial, Threaded, DistributedQueue
 export minimizer, history, results, printmin
 export summaryplot
 export Nominal, Ordinal, Continuous
@@ -15,7 +15,7 @@ export save_hyperoptimizer, load_hyperoptimizer
 using Random
 using Printf
 using Distributed
-using Dates: DateTime, Millisecond, now
+using Dates: DateTime, now
 using StableRNGs: StableRNG
 import JLD2
 import ProgressMeter
@@ -58,7 +58,6 @@ include("executors/executor.jl")
 include("executors/serial.jl")
 include("executors/threaded.jl")
 include("executors/distributed_queue.jl")
-include("executors/virtual_benchmark.jl")
 
 include("basic/optimizer.jl")
 
