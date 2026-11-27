@@ -98,14 +98,6 @@ function _train_epochs!(model, opt_state, epochs::Int)
     return model
 end
 
-const TRIALS_DONE = Threads.Atomic{Int}(0)
-
-function _count_trial()
-    n = Threads.atomic_add!(TRIALS_DONE, 1) + 1
-    n % 10 == 0 && _log("trials=$n")
-    return nothing
-end
-
 """
     nn_objective(params; pre_artefact=nothing)
         -> (val_loss, (model, nothing, R_MAX, finished_at))
@@ -113,7 +105,6 @@ end
 function nn_objective(p; pre_artefact=nothing)
     model, opt_state = _setup(p.n_dense_layers, p.hidden, p.activation, p.lr, p.reg)
     _train_epochs!(model, opt_state, RANDOM_FULL_EPOCHS[])
-    _count_trial()
     return _val_loss(model), (model, nothing, R_MAX, time())
 end
 
@@ -130,7 +121,6 @@ function nn_objective_stateful(p; pre_artefact=nothing)
         resource_to_run = p.r - resource_trained
     end
     resource_to_run > 0 && _train_epochs!(model, opt_state, round(Int, resource_to_run * EPOCHS_PER_RESOURCE))
-    _count_trial()
     return _val_loss(model), (model, opt_state, p.r, time())
 end
 
@@ -223,9 +213,8 @@ function run_task(task)
                 sha_inner_sampler=nameof(typeof(SHA_INNER)))
     _log("repeat=$repeat sampler=$sampler executor=$executor -- starting")
     ho = MAKE_HYPEROPTIMIZER[sampler]()
-    TRIALS_DONE[] = 0
     t0 = time()
-    run!(ho; executor=EXECUTORS[Symbol(executor)], show_progress=false)
+    run!(ho; executor=EXECUTORS[Symbol(executor)])
     pairs = _timed_results(ho, t0)
     elapsed = time() - t0
     best = isempty(pairs) ? NaN : minimum(last, pairs)
