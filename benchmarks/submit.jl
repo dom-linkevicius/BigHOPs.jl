@@ -2,8 +2,7 @@ using Pkg
 
 ENV["JULIA_CPU_TARGET"] = "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
 Pkg.resolve()
-Pkg.instantiate()
-Pkg.precompile()
+Pkg.instantiate(; allow_autoprecomp=false)
 
 include("tasks.jl")
 
@@ -12,6 +11,18 @@ const BENCHMARKS = isempty(ARGS) || ARGS == ["all"] ? sort(collect(keys(TASKS)))
 
 all(in(keys(TASKS)), BENCHMARKS) ||
     error("unknown benchmark in $BENCHMARKS; pass any of $(sort(collect(keys(TASKS)))), \"all\", or nothing")
+
+function precompile_dependency()
+    stale_cache, cachepath_cache = Dict{Base.StaleCacheKey,Bool}(), Dict{Base.PkgId,Vector{String}}()
+    ids = [Base.PkgId(uuid, info.name) for (uuid, info) in Pkg.dependencies()]
+    all(id -> Base.in_sysimage(id) || Base.isprecompiled(id; stale_cache, cachepath_cache), ids) && return String[]
+    mkpath(joinpath(@__DIR__, "results", "logs"))
+    job = first(split(readchomp(Cmd(`sbatch --parsable precompile.sbatch`; dir=@__DIR__)), ';'))
+    println("precompiling in job $job, benchmark jobs wait for it")
+    return ["--dependency=afterok:$job", "--kill-on-invalid-dep=yes"]
+end
+
+const DEPENDENCY = precompile_dependency()
 
 function array_spec(ids)
     runs = UnitRange{Int}[]
@@ -32,7 +43,7 @@ for benchmark in BENCHMARKS
     pending = [i for (i, task) in enumerate(tasks) if !isfile(task.path)]
     for sbatch in unique(tasks[i].sbatch for i in pending)
         jobs = unique(tasks[i].job for i in pending if tasks[i].sbatch == sbatch)
-        run(Cmd(`sbatch --array=$(array_spec(jobs)) $sbatch`; dir=@__DIR__))
+        run(Cmd(`sbatch $DEPENDENCY --array=$(array_spec(jobs)) $sbatch`; dir=@__DIR__))
     end
     println("$benchmark: submitted $(length(pending)) of $(length(tasks)) tasks")
 end
