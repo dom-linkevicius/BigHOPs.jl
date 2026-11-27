@@ -5,11 +5,11 @@ using Statistics: mean, std
 const RESULTS_DIR = joinpath(@__DIR__, "..", "..", "results", "counting_ones")
 const OUTDIR = joinpath(@__DIR__, "..", "..", "..", "docs", "src", "figures")
 const SAMPLER_COLORS = Dict("Random" => Makie.wong_colors()[1], "Hyperband" => Makie.wong_colors()[3], "DEHB" => Makie.wong_colors()[2],
-                            "BOHB" => Makie.wong_colors()[4])
+                            "BOHB" => Makie.wong_colors()[4], "GP" => Makie.wong_colors()[6])
 
 const PLOTS = (
-    (ncat=32, ncont=32, samplers=("Random", "Hyperband", "DEHB", "BOHB"), xlims=(0.015, 1e6), ylims=(0.015, 0.5)),
-    (ncat=8, ncont=8, samplers=("Random", "Hyperband", "DEHB", "BOHB"), xlims=(1e-1, 1e4), ylims=(1e-5, 1e0)),
+    (ncat=32, ncont=32, samplers=("Random", "Hyperband", "DEHB", "BOHB", "GP"), xlims=(0.015, 1e6), ylims=(0.015, 0.5)),
+    (ncat=8, ncont=8, samplers=("Random", "Hyperband", "DEHB", "BOHB", "GP"), xlims=(1e-1, 1e4), ylims=(1e-5, 1e0)),
 )
 
 const GRID = exp10.(range(-2, 6; length=160))
@@ -47,10 +47,10 @@ end
 const METRICS = (
     (title="Falkner et al. (2018)", ylabel="immediate regret", max_repeats=512,
      curves=Dict("Random" => incumbent_true_regret, "Hyperband" => incumbent_true_regret,
-                 "DEHB" => incumbent_true_regret, "BOHB" => incumbent_true_regret)),
+                 "DEHB" => incumbent_true_regret, "BOHB" => incumbent_true_regret, "GP" => incumbent_true_regret)),
     (title="Awad et al. (2021)", ylabel="validation regret", max_repeats=50,
      curves=Dict("Random" => hpbandster_measured_regret, "Hyperband" => hpbandster_measured_regret,
-                 "DEHB" => hpbandster_measured_regret, "BOHB" => hpbandster_measured_regret)),
+                 "DEHB" => hpbandster_measured_regret, "BOHB" => hpbandster_measured_regret, "GP" => hpbandster_measured_regret)),
 )
 
 function on_grid(budget, curve)
@@ -86,8 +86,8 @@ function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims)
     decades = ylims === nothing ? nothing : floor(Int, log10(ylims[1])):ceil(Int, log10(ylims[2]))
     bottom = ylims === nothing ? floatmin(Float64) : ylims[1] / 10
     fig = Figure(size=(1000, 450), fontsize=24, figure_padding=(16, 40, 16, 16))
-    repeats = 0
     for (column, metric) in enumerate(METRICS)
+        repeats = Dict{String,Int}()
         ax = Axis(fig[3, column]; title=metric.title, xlabel="cumulative budget / b_max", ylabel=metric.ylabel,
                   xscale=log10, yscale=log10,
                   xticks=Makie.LogTicks(-2:6),
@@ -97,12 +97,14 @@ function plot_counting_ones(; ncat, ncont, samplers, xlims, ylims)
                   yminorticks=decades === nothing ? IntervalsBetween(9) : [m * 10.0^e for e in decades for m in 2:9])
         for name in samplers
             curves = load_curves(ncat, ncont, name; curve=metric.curves[name], max_repeats=metric.max_repeats)
-            repeats = size(curves, 1)
+            repeats[name] = size(curves, 1)
             color = SAMPLER_COLORS[name]
             lines!(ax, GRID, columnwise(mean, curves, bottom); label=name, color=color)
             band!(ax, GRID, columnwise(c -> mean(c) - standard_error(c), curves, bottom), columnwise(c -> mean(c) + standard_error(c), curves, bottom); color=(color, 0.15))
         end
-        ax.title = "$(metric.title), $repeats repeats"
+        most = maximum(values(repeats))
+        fewer = join(("$name $(repeats[name])" for name in samplers if repeats[name] < most), ", ")
+        ax.title = isempty(fewer) ? "$(metric.title), $most repeats" : "$(metric.title), $most repeats ($fewer)"
         xlims!(ax, xlims...)
         if ylims !== nothing
             ylims!(ax, ylims...)

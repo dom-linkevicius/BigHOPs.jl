@@ -7,6 +7,8 @@ using StableRNGs: StableRNG
 using Random: shuffle
 using LinearAlgebra: BLAS
 
+include(joinpath(@__DIR__, "..", "gp_sampler.jl"))
+
 BLAS.set_num_threads(1)
 
 const R_MIN = 5
@@ -96,6 +98,14 @@ function _train_epochs!(model, opt_state, epochs::Int)
     return model
 end
 
+const TRIALS_DONE = Threads.Atomic{Int}(0)
+
+function _count_trial()
+    n = Threads.atomic_add!(TRIALS_DONE, 1) + 1
+    n % 10 == 0 && _log("trials=$n")
+    return nothing
+end
+
 """
     nn_objective(params; pre_artefact=nothing)
         -> (val_loss, (model, nothing, R_MAX, finished_at))
@@ -103,6 +113,7 @@ end
 function nn_objective(p; pre_artefact=nothing)
     model, opt_state = _setup(p.n_dense_layers, p.hidden, p.activation, p.lr, p.reg)
     _train_epochs!(model, opt_state, RANDOM_FULL_EPOCHS[])
+    _count_trial()
     return _val_loss(model), (model, nothing, R_MAX, time())
 end
 
@@ -119,6 +130,7 @@ function nn_objective_stateful(p; pre_artefact=nothing)
         resource_to_run = p.r - resource_trained
     end
     resource_to_run > 0 && _train_epochs!(model, opt_state, round(Int, resource_to_run * EPOCHS_PER_RESOURCE))
+    _count_trial()
     return _val_loss(model), (model, opt_state, p.r, time())
 end
 
@@ -136,7 +148,7 @@ function _warmup_objective_stateful(p; pre_artefact=nothing)
     return _val_loss(model), (model, opt_state, p.r, time())
 end
 
-_log(msg) = (println(msg); flush(stdout))
+_log(msg) = (println(Libc.strftime("%T", time()), " ", msg); flush(stdout))
 
 const CANDIDATES = (
     lr=Continuous(-5, -1; transform=x -> 10.0^x),
@@ -173,6 +185,7 @@ const MAKE_HYPEROPTIMIZER = Dict(
     "ASHA" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, ASHA(R=R_MAX, η=ETA, r_min=R_MIN, inner=SHA_INNER)),
     "DEHB" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, DEHB(R=R_MAX, η=ETA, r_min=R_MIN)),
     "BOHB" => () -> Hyperoptimizer(SH_OBJ, CANDIDATES, BOHB(R=R_MAX, η=ETA, r_min=R_MIN)),
+    "GP" => () -> Hyperoptimizer(PLAIN_OBJ, CANDIDATES; sampler=gp_sampler(StableRNG(1)), n=N_TRIALS),
 )
 
 _log("Warming up (JIT compilation)...")
@@ -180,6 +193,7 @@ const WARMUP_OBJ = Stateful(_warmup_objective)
 const WARMUP_SH_OBJ = Stateful(_warmup_objective_stateful)
 for executor in EXECUTORS
     run!(Hyperoptimizer(WARMUP_OBJ, CANDIDATES; sampler=RandomSampler(), n=2); executor=executor, show_progress=false)
+    run!(Hyperoptimizer(WARMUP_OBJ, CANDIDATES; sampler=gp_sampler(StableRNG(1)), n=12); executor=executor, show_progress=false)
 end
 for sh_sampler in (Hyperband(R=1, η=3, r_min=1), ASHA(R=1, η=3, r_min=1), DEHB(R=3, η=3, r_min=1),
                    BOHB(R=1, η=3, r_min=1, iterations=20))
@@ -209,6 +223,7 @@ function run_task(task)
                 sha_inner_sampler=nameof(typeof(SHA_INNER)))
     _log("repeat=$repeat sampler=$sampler executor=$executor -- starting")
     ho = MAKE_HYPEROPTIMIZER[sampler]()
+    TRIALS_DONE[] = 0
     t0 = time()
     run!(ho; executor=EXECUTORS[Symbol(executor)], show_progress=false)
     pairs = _timed_results(ho, t0)

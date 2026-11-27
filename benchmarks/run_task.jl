@@ -6,14 +6,9 @@ const BENCHMARK_FILES = Dict("counting_ones" => "benchmark_code/counting_ones/co
 const BENCHMARK = ARGS[1]
 const JOB = parse(Int, ARGS[2])
 
-function job_tasks(benchmark, job)
-    per_job = TASKS_PER_JOB[benchmark]
-    return TASKS[benchmark][((job - 1) * per_job + 1):min(job * per_job, length(TASKS[benchmark]))]
-end
-
 include(BENCHMARK_FILES[BENCHMARK])
 
-for task in job_tasks(BENCHMARK, JOB)
+for task in filter(task -> task.job == JOB, TASKS[BENCHMARK])
     isfile(task.path) && continue
     result = run_task(task)
     mkpath(dirname(task.path))

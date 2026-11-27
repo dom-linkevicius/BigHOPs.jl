@@ -2,6 +2,8 @@ using BigHOPs
 using Distributions: Binomial
 using StableRNGs: StableRNG
 
+include(joinpath(@__DIR__, "..", "gp_sampler.jl"))
+
 const R_MIN = 9
 const R_MAX = 729
 const ETA = 3
@@ -31,6 +33,18 @@ end
 const ITERATION_BUDGET = _iteration_budget()
 _iterations(target) = max(1, ceil(Int, target / (ITERATION_BUDGET / R_MAX)))
 
+function _with_progress(f, label::String; every::Int=100)
+    n, t0 = Ref(0), time()
+    return function (p)
+        n[] += 1
+        if n[] % every == 0
+            println("$label trials=$(n[]) elapsed=$(round(time() - t0; digits=1))s")
+            flush(stdout)
+        end
+        return f(p)
+    end
+end
+
 function _make(name::String, target::Float64, seed::Int, ncat::Int, ncont::Int)
     candidates = counting_ones_candidates(ncat, ncont)
     full(p) = noisy_f(p, R_MAX, ncat, ncont)
@@ -38,6 +52,9 @@ function _make(name::String, target::Float64, seed::Int, ncat::Int, ncont::Int)
     plain(p) = noisy_f(p, p.r, ncat, ncont)
     name == "Random" &&
         return Hyperoptimizer(full, candidates; sampler=RandomSampler(StableRNG(seed)), n=round(Int, target))
+    name == "GP" &&
+        return Hyperoptimizer(_with_progress(full, "GP $(ncat + ncont)D repeat=$seed"), candidates;
+                              sampler=gp_sampler(StableRNG(seed)), n=round(Int, target))
     name == "Hyperband" &&
         return Hyperoptimizer(Stateful(sched), candidates,
                               Hyperband(R=R_MAX, η=ETA, r_min=R_MIN, iterations=_iterations(target),

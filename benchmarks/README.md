@@ -8,7 +8,8 @@ benchmarks/
   submit.jl       submits the repeats as Slurm arrays
   run_task.jl     runs one array job, called by the sbatch files
   benchmark_code/
-    counting_ones/  counting_ones.jl, counting_ones.sbatch, plot_counting_ones.jl
+    gp_sampler.jl   the GP sampler both benchmarks use
+    counting_ones/  counting_ones.jl, counting_ones.sbatch, counting_ones_gp.sbatch, plot_counting_ones.jl
     nn/             nn.jl, nn_threaded.sbatch, nn_serial.sbatch, plot_results.jl
   results/        one folder per benchmark: results and Slurm logs (gitignored)
 ```
@@ -28,7 +29,7 @@ julia --project=. submit.jl all             # delete all results, rerun everythi
 - `BIGHOPS_BENCHMARK_REPEATS`: NN repeats, 50 by default.
 - `BIGHOPS_COUNTING_ONES_REPEATS`: counting ones repeats, 512 by default.
 
-Each benchmark's Slurm settings (CPUs, time limit, memory) are in its sbatch files. A counting ones job runs 4 repeats, an NN job one. Each repeat is saved to `results/<benchmark>/<setting>/repeat_<k>.jld2` when it finishes, and the job's log to `results/<benchmark>/logs/`.
+Each benchmark's Slurm settings (CPUs, time limit, memory) are in its sbatch files. A counting ones job runs 4 repeats, a counting ones GP job or an NN job one. Counting ones GP runs at most 50 repeats. Each repeat is saved to `results/<benchmark>/<setting>/repeat_<k>.jld2` when it finishes, and the job's log to `results/<benchmark>/logs/`.
 
 A single job can also be run by hand, e.g. the first counting ones job:
 
