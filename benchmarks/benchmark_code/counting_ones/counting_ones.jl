@@ -33,18 +33,6 @@ end
 const ITERATION_BUDGET = _iteration_budget()
 _iterations(target) = max(1, ceil(Int, target / (ITERATION_BUDGET / R_MAX)))
 
-function _with_progress(f, label::String; every::Int=100)
-    n, t0 = Ref(0), time()
-    return function (p)
-        n[] += 1
-        if n[] % every == 0
-            println("$label trials=$(n[]) elapsed=$(round(time() - t0; digits=1))s")
-            flush(stdout)
-        end
-        return f(p)
-    end
-end
-
 function _make(name::String, target::Float64, seed::Int, ncat::Int, ncont::Int)
     candidates = counting_ones_candidates(ncat, ncont)
     full(p) = noisy_f(p, R_MAX, ncat, ncont)
@@ -53,7 +41,7 @@ function _make(name::String, target::Float64, seed::Int, ncat::Int, ncont::Int)
     name == "Random" &&
         return Hyperoptimizer(full, candidates; sampler=RandomSampler(StableRNG(seed)), n=round(Int, target))
     name == "GP" &&
-        return Hyperoptimizer(_with_progress(full, "GP $(ncat + ncont)D repeat=$seed"), candidates;
+        return Hyperoptimizer(full, candidates;
                               sampler=gp_sampler(StableRNG(seed)), n=round(Int, target))
     name == "Hyperband" &&
         return Hyperoptimizer(Stateful(sched), candidates,
@@ -74,7 +62,7 @@ end
 
 function _run_repeat(name::String, target::Float64, repeat::Int, ncat::Int, ncont::Int)
     ho = _make(name, target, repeat, ncat, ncont)
-    elapsed = @elapsed run!(ho; executor=Serial(), show_progress=false)
+    elapsed = @elapsed run!(ho; executor=Serial())
     return _trials(ho, ncat + ncont), elapsed
 end
 
