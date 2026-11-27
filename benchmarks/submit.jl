@@ -1,5 +1,6 @@
 using Pkg
 
+ENV["JULIA_CPU_TARGET"] = "generic;sandybridge,-xsaveopt,clone_all;haswell,-rdrnd,base(1)"
 Pkg.resolve()
 Pkg.instantiate()
 Pkg.precompile()
