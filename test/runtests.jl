@@ -13,6 +13,7 @@ const CONCERNS = Dict(
     "serial" => ["executors/serial.jl"],
     "threaded" => ["executors/threaded.jl"],
     "distributed" => ["executors/distributed_queue.jl", "executors/equivalence.jl"],
+    "virtual" => ["executors/virtual_benchmark.jl"],
 )
 const MULTITHREADED_CONCERNS = ("threaded", "distributed")
 

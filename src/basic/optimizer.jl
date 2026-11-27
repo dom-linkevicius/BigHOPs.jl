@@ -128,7 +128,7 @@ _should_stop_asking(ho::Hyperoptimizer) = reached_target(ho) || exhausted(ho.sam
     run!(ho; executor=Serial(), save_every=nothing, save_path=nothing, show_progress=true,
          time_cap=Inf, interrupt=false)
 
-Evaluate trials until the target is reached or the sampler is exhausted, using `executor` (`Serial`, `Threaded` or `DistributedQueue`). 
+Evaluate trials until the target is reached or the sampler is exhausted, using `executor` (`Serial`, `Threaded`, `DistributedQueue` or `VirtualBenchmarkExecutor`).
 Given `save_path`, `ho` is checkpointed when the run ends, and also after every `save_every` trials if that is set; resume with `load_hyperoptimizer`.
 Trial start until `time_cap` (seconds) is reached, either waiting for running trials to finish,
 or marking them `Abandoned` if `interrupt=true`. `DistributedQueue` then removes
