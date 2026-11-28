@@ -25,7 +25,7 @@ makedocs(;
             "General functionalities" => "general_functionalities.md",
             "Plotting" => "plotting.md",
         ],
-        "Practical recommendations and benchmarks" => "benchmarks.md",
+        # "Practical recommendations and benchmarks" => "benchmarks.md",
         "Contributing" => "contributing.md",
         "Provenance" => "provenance.md",
         "References" => "references.md",
